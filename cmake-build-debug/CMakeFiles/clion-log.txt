@@ -1,0 +1,1 @@
+MinGW not found at: C:\KIDE\host\ide\cygwin\lib\gcc\i686-pc-mingw32 Configure
