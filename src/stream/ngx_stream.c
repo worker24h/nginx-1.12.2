@@ -97,7 +97,7 @@ ngx_stream_block(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
     *(ngx_stream_conf_ctx_t **) conf = ctx;
 
     /* count the number of the stream modules and set up their indices */
-
+    /* 获取所有stream模块数量并且设置他们的索引值ctx_index             */
     ngx_stream_max_module = ngx_count_modules(cf->cycle, NGX_STREAM_MODULE);
 
 

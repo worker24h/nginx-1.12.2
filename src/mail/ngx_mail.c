@@ -90,7 +90,7 @@ ngx_mail_block(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
     *(ngx_mail_conf_ctx_t **) conf = ctx;
 
     /* count the number of the mail modules and set up their indices */
-
+    /* 获取所有mail模块数量并且设置他们的索引值ctx_index             */
     ngx_mail_max_module = ngx_count_modules(cf->cycle, NGX_MAIL_MODULE);
 
 

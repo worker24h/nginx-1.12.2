@@ -113,7 +113,7 @@ struct ngx_event_s
     unsigned available : 1;
 #endif
 
-    ngx_event_handler_pt handler;
+    ngx_event_handler_pt handler; /* ´¦Àí¸ÃÊÂ¼şµÄ»Øµ÷º¯Êı */
 
 #if (NGX_HAVE_IOCP)
     ngx_event_ovlp_t ovlp;
@@ -427,7 +427,7 @@ extern ngx_os_io_t ngx_io;
 
 typedef struct
 {
-    ngx_uint_t connections; //è¿æ¥æ± å¤§å°
+    ngx_uint_t connections; //
     ngx_uint_t use;
 
     ngx_flag_t multi_accept;

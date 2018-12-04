@@ -34,7 +34,7 @@ time_t ngx_next_time(time_t when);
 extern volatile ngx_time_t  *ngx_cached_time;
 
 #define ngx_time()           ngx_cached_time->sec
-#define ngx_timeofday()      (ngx_time_t *) ngx_cached_time
+#define ngx_timeofday()      (ngx_time_t *) ngx_cached_time  //保存最近时间
 
 extern volatile ngx_str_t    ngx_cached_err_log_time;
 extern volatile ngx_str_t    ngx_cached_http_time;

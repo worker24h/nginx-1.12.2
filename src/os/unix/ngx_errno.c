@@ -25,7 +25,7 @@
  */
 
 
-static ngx_str_t  *ngx_sys_errlist;
+static ngx_str_t  *ngx_sys_errlist; /* 错误信息 通过strerror获取数据 */
 static ngx_str_t   ngx_unknown_error = ngx_string("Unknown error");
 
 
@@ -55,7 +55,7 @@ ngx_strerror_init(void)
      * malloc() is used and possible errors are logged using strerror().
      */
 
-    len = NGX_SYS_NERR * sizeof(ngx_str_t);
+    len = NGX_SYS_NERR * sizeof(ngx_str_t);/* 为数组分配内存 */
 
     ngx_sys_errlist = malloc(len);
     if (ngx_sys_errlist == NULL) {
@@ -66,7 +66,7 @@ ngx_strerror_init(void)
         msg = strerror(err);
         len = ngx_strlen(msg);
 
-        p = malloc(len);
+        p = malloc(len);//为错误信息分配内存
         if (p == NULL) {
             goto failed;
         }

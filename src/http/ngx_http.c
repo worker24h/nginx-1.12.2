@@ -143,7 +143,7 @@ ngx_http_block(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 
 
     /* count the number of the http modules and set up their indices */
-
+    /* 获取所有http模块数量并且设置他们的索引值ctx_index             */
     ngx_http_max_module = ngx_count_modules(cf->cycle, NGX_HTTP_MODULE);
 
 
@@ -1706,7 +1706,7 @@ ngx_http_add_listening(ngx_conf_t *cf, ngx_http_conf_addr_t *addr)
     ngx_listening_t           *ls;
     ngx_http_core_loc_conf_t  *clcf;
     ngx_http_core_srv_conf_t  *cscf;
-
+    /* 只创建结构 并没有创建socket以及进行listen */
     ls = ngx_create_listening(cf, &addr->opt.sockaddr.sockaddr,
                               addr->opt.socklen);
     if (ls == NULL) {
@@ -1714,8 +1714,10 @@ ngx_http_add_listening(ngx_conf_t *cf, ngx_http_conf_addr_t *addr)
     }
 
     ls->addr_ntop = 1;
-
-    ls->handler = ngx_http_init_connection;
+    /**
+     * ngx_epoll_process_events --> ngx_event_accept --> ngx_http_init_connection
+     */
+    ls->handler = ngx_http_init_connection;/* 当有连接到来时调用回调函数 */
 
     cscf = addr->default_server;
     ls->pool_size = cscf->connection_pool_size;

@@ -825,7 +825,7 @@ ngx_epoll_process_events(ngx_cycle_t *cycle, ngx_msec_t timer, ngx_uint_t flags)
     ngx_log_debug1(NGX_LOG_DEBUG_EVENT, cycle->log, 0,
                    "epoll timer: %M", timer);
 
-    events = epoll_wait(ep, event_list, (int)nevents, timer);
+    events = epoll_wait(ep, event_list, (int)nevents, timer);//Ä¬ÈÏÒ»·ÖÖÓ
 
     err = (events == -1) ? ngx_errno : 0;
 

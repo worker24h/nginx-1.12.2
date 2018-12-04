@@ -449,7 +449,7 @@ ngx_open_listening_sockets(ngx_cycle_t *cycle)
 
                 continue;
             }
-
+            //创建用于监听的socket
             s = ngx_socket(ls[i].sockaddr->sa_family, ls[i].type, 0);
 
             if (s == (ngx_socket_t) -1) {
@@ -503,7 +503,7 @@ ngx_open_listening_sockets(ngx_cycle_t *cycle)
 
 #if (NGX_HAVE_INET6 && defined IPV6_V6ONLY)
 
-            if (ls[i].sockaddr->sa_family == AF_INET6) {
+            if (ls[i].sockaddr->sa_family == AF_INET6) {//ipv6
                 int  ipv6only;
 
                 ipv6only = ls[i].ipv6only;
@@ -521,7 +521,7 @@ ngx_open_listening_sockets(ngx_cycle_t *cycle)
             /* TODO: close on exit */
 
             if (!(ngx_event_flags & NGX_USE_IOCP_EVENT)) {
-                if (ngx_nonblocking(s) == -1) {
+                if (ngx_nonblocking(s) == -1) {//设置非阻塞io
                     ngx_log_error(NGX_LOG_EMERG, log, ngx_socket_errno,
                                   ngx_nonblocking_n " %V failed",
                                   &ls[i].addr_text);
@@ -566,7 +566,7 @@ ngx_open_listening_sockets(ngx_cycle_t *cycle)
 
 #if (NGX_HAVE_UNIX_DOMAIN)
 
-            if (ls[i].sockaddr->sa_family == AF_UNIX) {
+            if (ls[i].sockaddr->sa_family == AF_UNIX) {//unix domain
                 mode_t   mode;
                 u_char  *name;
 

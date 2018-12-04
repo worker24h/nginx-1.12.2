@@ -22,7 +22,7 @@ typedef void (*ngx_spawn_proc_pt) (ngx_cycle_t *cycle, void *data);
 typedef struct {
     ngx_pid_t           pid;
     int                 status;
-    ngx_socket_t        channel[2]; /* 保存socketpaire生成socket对象 */
+    ngx_socket_t        channel[2]; /* 保存socketpair生成socket对象 */
 
     ngx_spawn_proc_pt   proc;
     void               *data;
@@ -48,7 +48,7 @@ typedef struct {
 
 #define NGX_PROCESS_NORESPAWN     -1
 #define NGX_PROCESS_JUST_SPAWN    -2
-#define NGX_PROCESS_RESPAWN       -3
+#define NGX_PROCESS_RESPAWN       -3  /* 重生 */
 #define NGX_PROCESS_JUST_RESPAWN  -4
 #define NGX_PROCESS_DETACHED      -5
 

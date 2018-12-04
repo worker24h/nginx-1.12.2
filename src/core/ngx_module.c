@@ -21,7 +21,7 @@ ngx_int_t
 ngx_preinit_modules(void)
 {
     ngx_uint_t i;
-    // ngx_modules 文件是在configure过程中生成的
+    // ngx_modules 数组定义ngx_modules.c 该文件在configure过程中自动生成
     for (i = 0; ngx_modules[i]; i++)
     {
         ngx_modules[i]->index = i;
@@ -35,7 +35,8 @@ ngx_preinit_modules(void)
 }
 
 /**
- * 将modules数组赋值到cycle中
+ * 初始化module 拷贝ngx_modules
+ * @param cycle cycle对象
  */
 ngx_int_t
 ngx_cycle_modules(ngx_cycle_t *cycle)
@@ -67,7 +68,7 @@ ngx_init_modules(ngx_cycle_t *cycle)
     for (i = 0; cycle->modules[i]; i++)
     {
         if (cycle->modules[i]->init_module)
-        {
+        {//只有这两个模块实现了init_module ngx_event_core_module  ngx_regex_module
             if (cycle->modules[i]->init_module(cycle) != NGX_OK)
             {
                 return NGX_ERROR;
@@ -78,6 +79,13 @@ ngx_init_modules(ngx_cycle_t *cycle)
     return NGX_OK;
 }
 
+/**
+ * 获取相同类型下module数量
+ * @param cycle 核心结构体
+ * @param type  模块类型 例如NGX_EVENT_MODULE,NGX_HTTP_MODULE
+ * @return 返回数量
+ * 注意此方法，还会设置子类型索引 即在相同module类型下ctx_index
+ */
 ngx_int_t
 ngx_count_modules(ngx_cycle_t *cycle, ngx_uint_t type)
 {
@@ -99,7 +107,7 @@ ngx_count_modules(ngx_cycle_t *cycle, ngx_uint_t type)
         }
 
         if (module->ctx_index != NGX_MODULE_UNSET_INDEX)
-        {
+        {//表示当前module已经设置过ctx_index
 
             /* if ctx_index was assigned, preserve it */
 
@@ -117,7 +125,7 @@ ngx_count_modules(ngx_cycle_t *cycle, ngx_uint_t type)
         }
 
         /* search for some free index */
-
+        /* 设置子类型 索引 */
         module->ctx_index = ngx_module_ctx_index(cycle, type, next);
 
         if (module->ctx_index > max)

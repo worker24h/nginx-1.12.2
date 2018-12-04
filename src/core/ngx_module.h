@@ -225,7 +225,7 @@ struct ngx_module_s {
     /**
      * 每个模块又可以存在子模块，例如: ngx_event_core_module, ngx_epoll_module
      * 都是从属于ngx_events_module模块的子模块。
-     * ctx_index初始化ngx_module_ctx_index
+     * ctx_index初始化在函数ngx_count_modules中
      */
     ngx_uint_t            ctx_index;
     /**
@@ -241,14 +241,20 @@ struct ngx_module_s {
 
     ngx_uint_t            version;
     const char           *signature;
-
+    
+    /** 模块定义时指定
+     * 不同模块实际指向不同，例如:
+     * NGX_CORE_MODULE 指向的ngx_core_module_t
+     * NGX_EVENT_MODULE 指向的ngx_event_module_t
+     * NGX_HTTP_MODULE 指向的ngx_http_module_t
+     */
     void                 *ctx;
     ngx_command_t        *commands;
     ngx_uint_t            type;
 
-    ngx_int_t           (*init_master)(ngx_log_t *log);
+    ngx_int_t           (*init_master)(ngx_log_t *log);//目前没有使用
 
-    ngx_int_t           (*init_module)(ngx_cycle_t *cycle);
+    ngx_int_t           (*init_module)(ngx_cycle_t *cycle);//ngx_init_cycle中调用
 
     ngx_int_t           (*init_process)(ngx_cycle_t *cycle);
     ngx_int_t           (*init_thread)(ngx_cycle_t *cycle);

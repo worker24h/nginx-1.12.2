@@ -497,7 +497,7 @@ ngx_conf_handler(ngx_conf_t *cf, ngx_int_t last)
                 }
             }
 
-            rv = cmd->set(cf, cmd, conf); //回到函数
+            rv = cmd->set(cf, cmd, conf); //执行解析配置项
 
             if (rv == NGX_CONF_OK)
             {

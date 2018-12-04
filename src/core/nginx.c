@@ -221,10 +221,10 @@ main(int argc, char *const *argv)
 
     /* TODO */ ngx_max_sockets = -1;
 
-    ngx_time_init();
+    ngx_time_init();//初始化时间相关 后续会用在定时器
 
 #if (NGX_PCRE)
-    ngx_regex_init();
+    ngx_regex_init(); //正则表达式相关 主要初始化pcre库
 #endif
 
     ngx_pid = ngx_getpid();
@@ -252,11 +252,11 @@ main(int argc, char *const *argv)
     if (init_cycle.pool == NULL) {
         return 1;
     }
-
+    /* 将命令行参数 拷贝到ngx_argv中 */
     if (ngx_save_argv(&init_cycle, argc, argv) != NGX_OK) {
         return 1;
     }
-
+    /* 设置配置文件路径 */
     if (ngx_process_options(&init_cycle) != NGX_OK) {
         return 1;
     }
@@ -272,15 +272,15 @@ main(int argc, char *const *argv)
     if (ngx_crc32_table_init() != NGX_OK) {
         return 1;
     }
-
+    //主要用于平滑升级 继承listen socket
     if (ngx_add_inherited_sockets(&init_cycle) != NGX_OK) {
         return 1;
     }
-
+    //初始化modules 主要设置ngx_modules
     if (ngx_preinit_modules() != NGX_OK) {
         return 1;
     }
-
+    /* 初始化cycle */
     cycle = ngx_init_cycle(&init_cycle);
     if (cycle == NULL) {
         if (ngx_test_config) {
@@ -338,7 +338,7 @@ main(int argc, char *const *argv)
     }
 
     if (!ngx_inherited && ccf->daemon) {
-        if (ngx_daemon(cycle->log) != NGX_OK) {
+        if (ngx_daemon(cycle->log) != NGX_OK) {//设置后台进程，前台进程退出
             return 1;
         }
 
@@ -351,7 +351,7 @@ main(int argc, char *const *argv)
 
 #endif
 
-    if (ngx_create_pidfile(&ccf->pid, cycle->log) != NGX_OK) {
+    if (ngx_create_pidfile(&ccf->pid, cycle->log) != NGX_OK) {//创建pid文件
         return 1;
     }
 
@@ -369,10 +369,10 @@ main(int argc, char *const *argv)
     ngx_use_stderr = 0;
 
     if (ngx_process == NGX_PROCESS_SINGLE) {
-        ngx_single_process_cycle(cycle);
+        ngx_single_process_cycle(cycle);//单机模式
 
     } else {
-        ngx_master_process_cycle(cycle);
+        ngx_master_process_cycle(cycle);//master/worker模式
     }
 
     return 0;
@@ -440,7 +440,10 @@ ngx_show_version_info(void)
     }
 }
 
-
+/**
+ * 继承监听socket
+ * 主要用于平滑升级
+ */
 static ngx_int_t
 ngx_add_inherited_sockets(ngx_cycle_t *cycle)
 {
@@ -448,12 +451,12 @@ ngx_add_inherited_sockets(ngx_cycle_t *cycle)
     ngx_int_t         s;
     ngx_listening_t  *ls;
 
-    inherited = (u_char *) getenv(NGINX_VAR);
+    inherited = (u_char *) getenv(NGINX_VAR); //获取环境变量 
 
     if (inherited == NULL) {
         return NGX_OK;
     }
-
+    /* 以下代码通常出现在平滑升级场景 */
     ngx_log_error(NGX_LOG_NOTICE, cycle->log, 0,
                   "using inherited sockets from \"%s\"", inherited);
 
@@ -463,7 +466,7 @@ ngx_add_inherited_sockets(ngx_cycle_t *cycle)
     {
         return NGX_ERROR;
     }
-
+    /* 环境变量NGINX，格式Port1;Port2;Port3 */
     for (p = inherited, v = p; *p; p++) {
         if (*p == ':' || *p == ';') {
             s = ngx_atoi(v, p - v);
@@ -698,7 +701,7 @@ ngx_exec_new_binary(ngx_cycle_t *cycle, char *const *argv)
     ctx.envp = (char *const *) env;
 
     ccf = (ngx_core_conf_t *) ngx_get_conf(cycle->conf_ctx, ngx_core_module);
-
+    //重命名pid文件
     if (ngx_rename_file(ccf->pid.data, ccf->oldpid.data) == NGX_FILE_ERROR) {
         ngx_log_error(NGX_LOG_ALERT, cycle->log, ngx_errno,
                       ngx_rename_file_n " %s to %s failed "
@@ -954,7 +957,7 @@ ngx_process_options(ngx_cycle_t *cycle)
 #ifdef NGX_CONF_PREFIX
         ngx_str_set(&cycle->conf_prefix, NGX_CONF_PREFIX);
 #else
-        ngx_str_set(&cycle->conf_prefix, NGX_PREFIX);
+        ngx_str_set(&cycle->conf_prefix, NGX_PREFIX);//默认 /usr/local/nginx/conf/
 #endif
         ngx_str_set(&cycle->prefix, NGX_PREFIX);
 
@@ -968,7 +971,7 @@ ngx_process_options(ngx_cycle_t *cycle)
     } else {
         ngx_str_set(&cycle->conf_file, NGX_CONF_PATH);
     }
-
+    /* cycle->conf_file 默认 /usr/local/nginx/conf/nginx.conf */
     if (ngx_conf_full_name(cycle, &cycle->conf_file, 0) != NGX_OK) {
         return NGX_ERROR;
     }

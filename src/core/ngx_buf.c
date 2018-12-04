@@ -8,19 +8,23 @@
 #include <ngx_config.h>
 #include <ngx_core.h>
 
-
+/**
+ * 申请一个buf，类型为temporary
+ * @param pool 内存池
+ * @param size 当前buf大小
+ */
 ngx_buf_t *
 ngx_create_temp_buf(ngx_pool_t *pool, size_t size)
 {
     ngx_buf_t *b;
 
-    b = ngx_calloc_buf(pool);
+    b = ngx_calloc_buf(pool);//先申请一个buf头部
     if (b == NULL) {
         return NULL;
     }
 
-    b->start = ngx_palloc(pool, size);
-    if (b->start == NULL) {
+    b->start = ngx_palloc(pool, size);//buf内容体
+    if (b->start == NULL) {//申请失败
         return NULL;
     }
 
@@ -34,23 +38,26 @@ ngx_create_temp_buf(ngx_pool_t *pool, size_t size)
      *     b->tag = 0;
      *     and flags
      */
-
+    //设置各类指针
     b->pos = b->start;
     b->last = b->start;
     b->end = b->last + size;
-    b->temporary = 1;
+    b->temporary = 1;//标记为临时内存
 
     return b;
 }
 
-
+/**
+ * 分配一个chain节点
+ * @param pool 内存池
+ */
 ngx_chain_t *
 ngx_alloc_chain_link(ngx_pool_t *pool)
 {
     ngx_chain_t  *cl;
 
     cl = pool->chain;
-
+    /* Nginx为了提升效率，会把已经使用过ngx_chain_t保存到ngx_pool_t中以便下次使用 */
     if (cl) {
         pool->chain = cl->next;
         return cl;
@@ -64,7 +71,11 @@ ngx_alloc_chain_link(ngx_pool_t *pool)
     return cl;
 }
 
-
+/**
+ * 分配一个buf链表
+ * @param pool 内存池
+ * @param bufs buf集合
+ */
 ngx_chain_t *
 ngx_create_chain_of_bufs(ngx_pool_t *pool, ngx_bufs_t *bufs)
 {
@@ -73,7 +84,7 @@ ngx_create_chain_of_bufs(ngx_pool_t *pool, ngx_bufs_t *bufs)
     ngx_buf_t    *b;
     ngx_chain_t  *chain, *cl, **ll;
 
-    p = ngx_palloc(pool, bufs->num * bufs->size);
+    p = ngx_palloc(pool, bufs->num * bufs->size);//申请buf内容体
     if (p == NULL) {
         return NULL;
     }
@@ -82,7 +93,7 @@ ngx_create_chain_of_bufs(ngx_pool_t *pool, ngx_bufs_t *bufs)
 
     for (i = 0; i < bufs->num; i++) {
 
-        b = ngx_calloc_buf(pool);
+        b = ngx_calloc_buf(pool);//为num个buf，申请buf头
         if (b == NULL) {
             return NULL;
         }
@@ -104,16 +115,16 @@ ngx_create_chain_of_bufs(ngx_pool_t *pool, ngx_bufs_t *bufs)
         b->temporary = 1;
 
         b->start = p;
-        p += bufs->size;
+        p += bufs->size;//调整p指针
         b->end = p;
 
-        cl = ngx_alloc_chain_link(pool);
+        cl = ngx_alloc_chain_link(pool);//申请ngx_chain_t 组织链表
         if (cl == NULL) {
             return NULL;
         }
 
         cl->buf = b;
-        *ll = cl;
+        *ll = cl;//插入链表
         ll = &cl->next;
     }
 
@@ -122,25 +133,31 @@ ngx_create_chain_of_bufs(ngx_pool_t *pool, ngx_bufs_t *bufs)
     return chain;
 }
 
-
+/**
+ * 复制buf链表
+ * @param pool 内存池
+ * @param chain 输出参数
+ * @param in    输入参数
+ */
 ngx_int_t
 ngx_chain_add_copy(ngx_pool_t *pool, ngx_chain_t **chain, ngx_chain_t *in)
 {
     ngx_chain_t  *cl, **ll;
 
     ll = chain;
-
+    //找到链表chain最后一个节点
     for (cl = *chain; cl; cl = cl->next) {
         ll = &cl->next;
     }
 
+    //循环遍历in
     while (in) {
         cl = ngx_alloc_chain_link(pool);
         if (cl == NULL) {
             return NGX_ERROR;
         }
 
-        cl->buf = in->buf;
+        cl->buf = in->buf;//只做指针指向 不进行实际内容拷贝
         *ll = cl;
         ll = &cl->next;
         in = in->next;
@@ -151,19 +168,23 @@ ngx_chain_add_copy(ngx_pool_t *pool, ngx_chain_t **chain, ngx_chain_t *in)
     return NGX_OK;
 }
 
-
+/**
+ * 从chain链中获取一个空闲buf
+ * @param pool 内存池
+ * @param free 待查找chain链
+ */
 ngx_chain_t *
 ngx_chain_get_free_buf(ngx_pool_t *p, ngx_chain_t **free)
 {
     ngx_chain_t  *cl;
 
-    if (*free) {
+    if (*free) {//如果链表不空 则表示空闲 所以直接取一个节点即可返回
         cl = *free;
         *free = cl->next;
         cl->next = NULL;
         return cl;
     }
-
+    //free链表为空 则需要从内存池中分配一个新的节点
     cl = ngx_alloc_chain_link(p);
     if (cl == NULL) {
         return NULL;
@@ -179,13 +200,21 @@ ngx_chain_get_free_buf(ngx_pool_t *p, ngx_chain_t **free)
     return cl;
 }
 
-
+/**
+ * 跟新chain链表 释放内存 分门别类
+ * @param p 内存池
+ * @param free 空闲链
+ * @param busy 正在使用链
+ * @param out  将out中分发到 free或者busy中
+ * @param tag  标志 分发原则
+ */
 void
 ngx_chain_update_chains(ngx_pool_t *p, ngx_chain_t **free, ngx_chain_t **busy,
     ngx_chain_t **out, ngx_buf_tag_t tag)
 {
     ngx_chain_t  *cl;
 
+    /* 将out中所有节点挂到busy中 */
     if (*out) {
         if (*busy == NULL) {
             *busy = *out;
@@ -202,16 +231,17 @@ ngx_chain_update_chains(ngx_pool_t *p, ngx_chain_t **free, ngx_chain_t **busy,
     while (*busy) {
         cl = *busy;
 
-        if (ngx_buf_size(cl->buf) != 0) {
+        if (ngx_buf_size(cl->buf) != 0) {//表示当前buf有尚未处理的数据 直接退出
             break;
         }
 
+        /* 如果tag不一致 则将chain挂到pool中 */
         if (cl->buf->tag != tag) {
             *busy = cl->next;
             ngx_free_chain(p, cl);
             continue;
         }
-
+        /* 修改指针并挂到free链中 */
         cl->buf->pos = cl->buf->start;
         cl->buf->last = cl->buf->start;
 

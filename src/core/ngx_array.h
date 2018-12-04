@@ -27,7 +27,13 @@ void ngx_array_destroy(ngx_array_t *a);
 void *ngx_array_push(ngx_array_t *a);
 void *ngx_array_push_n(ngx_array_t *a, ngx_uint_t n);
 
-
+/**
+ * 数组初始化
+ * @param array 数组
+ * @param pool  内存池
+ * @param n     数组包含元素个数
+ * @param size  一个数组元素所占内存大小
+ */
 static ngx_inline ngx_int_t
 ngx_array_init(ngx_array_t *array, ngx_pool_t *pool, ngx_uint_t n, size_t size)
 {
@@ -41,7 +47,7 @@ ngx_array_init(ngx_array_t *array, ngx_pool_t *pool, ngx_uint_t n, size_t size)
     array->nalloc = n;
     array->pool = pool;
 
-    array->elts = ngx_palloc(pool, n * size);
+    array->elts = ngx_palloc(pool, n * size);//分配内存
     if (array->elts == NULL) {
         return NGX_ERROR;
     }

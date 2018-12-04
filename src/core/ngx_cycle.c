@@ -30,6 +30,11 @@ ngx_uint_t ngx_quiet_mode;
 static ngx_connection_t dumb;
 /* STUB */
 
+/**
+ * 创建ngx_cycle_t核心结构
+ * @param old_cycle 旧的核心结构
+ * @return 返回新的ngx_cycle_t结构
+ */
 ngx_cycle_t *
 ngx_init_cycle(ngx_cycle_t *old_cycle)
 {
@@ -59,14 +64,14 @@ ngx_init_cycle(ngx_cycle_t *old_cycle)
     ngx_time_update();
 
     log = old_cycle->log;
-
+    /* 创建内存池 */
     pool = ngx_create_pool(NGX_CYCLE_POOL_SIZE, log);
     if (pool == NULL)
     {
         return NULL;
     }
     pool->log = log;
-
+    /* 在内存池中为ngx_cycle_t分配内存 */
     cycle = ngx_pcalloc(pool, sizeof(ngx_cycle_t));
     if (cycle == NULL)
     {
@@ -77,7 +82,7 @@ ngx_init_cycle(ngx_cycle_t *old_cycle)
     cycle->pool = pool;
     cycle->log = log;
     cycle->old_cycle = old_cycle;
-
+    /* 配置文件相关 */
     cycle->conf_prefix.len = old_cycle->conf_prefix.len;
     cycle->conf_prefix.data = ngx_pstrdup(pool, &old_cycle->conf_prefix);
     if (cycle->conf_prefix.data == NULL)
@@ -168,7 +173,7 @@ ngx_init_cycle(ngx_cycle_t *old_cycle)
         ngx_destroy_pool(pool);
         return NULL;
     }
-
+    /* 分配listening数组动态数组 如果第一次启动old_cycle->listening为0 */
     n = old_cycle->listening.nelts ? old_cycle->listening.nelts : 10;
 
     if (ngx_array_init(&cycle->listening, pool, n, sizeof(ngx_listening_t)) != NGX_OK)
@@ -180,7 +185,7 @@ ngx_init_cycle(ngx_cycle_t *old_cycle)
     ngx_memzero(cycle->listening.elts, n * sizeof(ngx_listening_t));
 
     ngx_queue_init(&cycle->reusable_connections_queue);
-
+    /* 创建大小为ngx_max_module,数组元素类型为void* 其实创建的指针数组 */
     cycle->conf_ctx = ngx_pcalloc(pool, ngx_max_module * sizeof(void *));
     if (cycle->conf_ctx == NULL)
     {
@@ -208,35 +213,42 @@ ngx_init_cycle(ngx_cycle_t *old_cycle)
     }
 
     ngx_strlow(cycle->hostname.data, (u_char *)hostname, cycle->hostname.len);
-
+    
+    /* 从全局变量ngx_modules拷贝到cycle->modules*/
     if (ngx_cycle_modules(cycle) != NGX_OK)
     {
         ngx_destroy_pool(pool);
         return NULL;
     }
-
+    /* 初始化核心模块即类型为NGX_CORE_MODULE */
     for (i = 0; cycle->modules[i]; i++)
     {
         if (cycle->modules[i]->type != NGX_CORE_MODULE)
         {
             continue;
         }
-
-        module = cycle->modules[i]->ctx;
+            
+        module = cycle->modules[i]->ctx;/* 定义模块时赋值 */
 
         if (module->create_conf)
         {
+            /**
+             * 目前定义create_conf回调方法 只有ngx_core_module和ngx_regex_module
+             * ngx_event_module没有定义create_conf,只定义了init_conf，可知
+             * ngx_event_module对应的conf_ctx是NULL, 但是在经过ngx_conf_parse后
+             * conf_ctx不为NULL. 
+             */
             rv = module->create_conf(cycle);
             if (rv == NULL)
             {
                 ngx_destroy_pool(pool);
                 return NULL;
             }
-            cycle->conf_ctx[cycle->modules[i]->index] = rv;
+            cycle->conf_ctx[cycle->modules[i]->index] = rv;//给指针数组赋值
         }
     }
 
-    senv = environ;
+    senv = environ;//保存环境变量
 
     ngx_memzero(&conf, sizeof(ngx_conf_t));
     /* STUB: init array ? */
@@ -271,7 +283,13 @@ ngx_init_cycle(ngx_cycle_t *old_cycle)
         ngx_destroy_cycle_pools(&conf);
         return NULL;
     }
-
+    /**
+     * 解析配置文件 
+     * 注1: 经过此方法之后 核心模块ngx_event_module对应的conf_ctx有数据了 
+     * 在执行ngx_conf_parse函数时，会解析nginx.conf配置文件，当遇到event标签，会调用
+     * ngx_events_block回调方法 该方法会设置conf_ctx
+     * 注2: 经过此方法cycle->listening中会保存真正数据
+     */
     if (ngx_conf_parse(&conf, &cycle->conf_file) != NGX_CONF_OK)
     {
         environ = senv;
@@ -625,6 +643,10 @@ ngx_init_cycle(ngx_cycle_t *old_cycle)
     }
     else
     {
+        /**
+         * listening赋值是在执行ngx_conf_parse 即解析配置文件时，
+         * 入口ngx_http_block,最终会ngx_create_listening
+         */
         ls = cycle->listening.elts;
         for (i = 0; i < cycle->listening.nelts; i++)
         {
@@ -643,14 +665,14 @@ ngx_init_cycle(ngx_cycle_t *old_cycle)
 #endif
         }
     }
-    // 鐩戝惉socket
+    /* open listening socket */
     if (ngx_open_listening_sockets(cycle) != NGX_OK)
     {
         goto failed;
     }
 
     if (!ngx_test_config)
-    {
+    {//对监听套接字进行配置 主要是socket选项
         ngx_configure_listening_sockets(cycle);
     }
 
@@ -662,7 +684,7 @@ ngx_init_cycle(ngx_cycle_t *old_cycle)
     }
 
     pool->log = cycle->log;
-    //鍒濆鍖栨墍鏈塵odules 鍗宠皟鐢ㄥ洖璋冨嚱鏁癷nit_modules
+    /* initialize all modules 调用所有模块init_module方法*/
     if (ngx_init_modules(cycle) != NGX_OK)
     {
         /* fatal */
@@ -1064,6 +1086,8 @@ void ngx_delete_pidfile(ngx_cycle_t *cycle)
 
 /**
  * 读取pid文件，调用kill接口，发送信号
+ * @param cycle 核心结构
+ * @param sig 要发送的信号
  */
 ngx_int_t
 ngx_signal_process(ngx_cycle_t *cycle, char *sig)

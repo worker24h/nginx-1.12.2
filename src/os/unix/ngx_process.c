@@ -281,7 +281,9 @@ ngx_execute_proc(ngx_cycle_t *cycle, void *data)
     exit(1);
 }
 
-
+/**
+ * 注册信号
+ */
 ngx_int_t
 ngx_init_signals(ngx_log_t *log)
 {
@@ -363,7 +365,7 @@ ngx_signal_handler(int signo)
             ngx_reopen = 1;
             action = ", reopening logs";
             break;
-
+        /* 用于平滑升级 USR2 */
         case ngx_signal_value(NGX_CHANGEBIN_SIGNAL):
             if (getppid() > 1 || ngx_new_binary > 0) {
 
@@ -444,7 +446,7 @@ ngx_signal_handler(int signo)
                       "before either old or new binary's process");
     }
 
-    if (signo == SIGCHLD) {
+    if (signo == SIGCHLD) {/* 表示worker进程有退出 */
         ngx_process_get_status();
     }
 
@@ -465,7 +467,7 @@ ngx_process_get_status(void)
     one = 0;
 
     for ( ;; ) {
-        pid = waitpid(-1, &status, WNOHANG);
+        pid = waitpid(-1, &status, WNOHANG);//获取异常退出的子进程id
 
         if (pid == 0) {
             return;
@@ -612,7 +614,12 @@ ngx_debug_point(void)
     }
 }
 
-
+/**
+ * 发送信号
+ * @param cycle 核心结构
+ * @param name 信号名称
+ * @param pid  进程id
+ */
 ngx_int_t
 ngx_os_signal_process(ngx_cycle_t *cycle, char *name, ngx_pid_t pid)
 {
