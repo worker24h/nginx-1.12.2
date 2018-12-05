@@ -20,11 +20,11 @@ typedef pid_t       ngx_pid_t;
 typedef void (*ngx_spawn_proc_pt) (ngx_cycle_t *cycle, void *data);
 
 typedef struct {
-    ngx_pid_t           pid;
+    ngx_pid_t           pid; /* 进程id 即worker进程id */
     int                 status;
     ngx_socket_t        channel[2]; /* 保存socketpair生成socket对象 */
 
-    ngx_spawn_proc_pt   proc;
+    ngx_spawn_proc_pt   proc; /* 进程函数 */
     void               *data;
     char               *name;
 
@@ -49,7 +49,7 @@ typedef struct {
 #define NGX_PROCESS_NORESPAWN     -1
 #define NGX_PROCESS_JUST_SPAWN    -2
 #define NGX_PROCESS_RESPAWN       -3  /* 重生 */
-#define NGX_PROCESS_JUST_RESPAWN  -4
+#define NGX_PROCESS_JUST_RESPAWN  -4  /* 当配置文件有变化时，需要重新加载配置 */
 #define NGX_PROCESS_DETACHED      -5
 
 

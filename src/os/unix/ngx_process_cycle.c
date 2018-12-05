@@ -148,7 +148,7 @@ void ngx_master_process_cycle(ngx_cycle_t *cycle)
     for (;;)
     {
         if (delay)
-        {
+        {//延迟 
             if (ngx_sigalrm)
             {
                 sigio = 0;
@@ -173,8 +173,9 @@ void ngx_master_process_cycle(ngx_cycle_t *cycle)
 
         ngx_log_debug0(NGX_LOG_DEBUG_EVENT, cycle->log, 0, "sigsuspend");
         /**
-         * 阻塞 等待信号发生 当信号产生会先调用信号处理函数 然后sigsuspend再返回 
-         * 执行后续处理
+         * 进程阻塞  非常重要一点
+         * 等待信号发生 当信号产生会先调用信号处理函数 当信号处理函数结束后
+         * sigsuspend才返回，执行后续代码
          */
         sigsuspend(&set);
 
@@ -243,7 +244,10 @@ void ngx_master_process_cycle(ngx_cycle_t *cycle)
 
             continue;
         }
-
+        /**
+         * 当master进程接收到HUP信号，用于重新加载配置。例如:配置文件变化，需要
+         * 更新配置
+         */
         if (ngx_reconfigure)
         {
             ngx_reconfigure = 0;
@@ -281,7 +285,10 @@ void ngx_master_process_cycle(ngx_cycle_t *cycle)
             ngx_signal_worker_processes(cycle,
                                         ngx_signal_value(NGX_SHUTDOWN_SIGNAL));
         }
-
+        /**
+         * 表示重启worker进程，进入此分支的前提是master进程接收到SIGCHLD信号，即
+         * worker进程异常退出
+         */
         if (ngx_restart)
         {
             ngx_restart = 0;
@@ -290,7 +297,9 @@ void ngx_master_process_cycle(ngx_cycle_t *cycle)
             ngx_start_cache_manager_processes(cycle, 0);
             live = 1;
         }
-
+        /**
+         * 当master进程接收到USR1信号，表明需要重新打开日志文件
+         */
         if (ngx_reopen)
         {
             ngx_reopen = 0;
@@ -299,14 +308,19 @@ void ngx_master_process_cycle(ngx_cycle_t *cycle)
             ngx_signal_worker_processes(cycle,
                                         ngx_signal_value(NGX_REOPEN_SIGNAL));
         }
-
+        /**
+         * 当master进程接收到USR2信号，表明进行平滑升级
+         */
         if (ngx_change_binary)
-        {//平滑升级
+        {
             ngx_change_binary = 0;
             ngx_log_error(NGX_LOG_NOTICE, cycle->log, 0, "changing binary");
             ngx_new_binary = ngx_exec_new_binary(cycle, ngx_argv);
         }
-
+        /**
+         * master进程收到WINCH信号(通过kill发送)后，会通过channel发送QUIT消息
+         * 给worker进程,当worker进程接收到QUIT消息就会优雅退出
+         */
         if (ngx_noaccept)
         {
             ngx_noaccept = 0;
@@ -383,6 +397,12 @@ void ngx_single_process_cycle(ngx_cycle_t *cycle)
     }
 }
 
+/**
+ * 创建worker进程
+ * @param cycle  核心结构体 
+ * @param n      worker进程数量
+ * @param type   创建worker进程方式
+ */
 static void
 ngx_start_worker_processes(ngx_cycle_t *cycle, ngx_int_t n, ngx_int_t type)
 {
@@ -402,10 +422,10 @@ ngx_start_worker_processes(ngx_cycle_t *cycle, ngx_int_t n, ngx_int_t type)
                           (void *)(intptr_t)i, "worker process", type);
 
         ch.pid = ngx_processes[ngx_process_slot].pid; /* 子进程id */
-        ch.slot = ngx_process_slot;
-        ch.fd = ngx_processes[ngx_process_slot].channel[0];
+        ch.slot = ngx_process_slot; /* 子进程在ngx_processes数组中索引 */
+        ch.fd = ngx_processes[ngx_process_slot].channel[0]; /* 父进程socketpair fd */
 
-        ngx_pass_open_channel(cycle, &ch);
+        ngx_pass_open_channel(cycle, &ch);//通过unix domain发送第一个消息给worker进程
     }
 }
 
@@ -788,8 +808,11 @@ ngx_worker_process_cycle(ngx_cycle_t *cycle, void *data)
 
     ngx_process = NGX_PROCESS_WORKER;
     ngx_worker = worker;
-
-    ngx_worker_process_init(cycle, worker); /* 初始化worker进程 */
+    /**
+     * 初始化worker进程
+     * 将listening socket 和 channel添加到epoll事件驱动中
+     */
+    ngx_worker_process_init(cycle, worker);
 
     ngx_setproctitle("worker process"); /* 设置进程名称 */
 
@@ -840,6 +863,11 @@ ngx_worker_process_cycle(ngx_cycle_t *cycle, void *data)
     }
 }
 
+/**
+ * worker进程初始化
+ * @param cycle 核心结构
+ * @param worker 当前worker进程在ngx_processes数组索引
+ */
 static void
 ngx_worker_process_init(ngx_cycle_t *cycle, ngx_int_t worker)
 {
@@ -978,6 +1006,7 @@ ngx_worker_process_init(ngx_cycle_t *cycle, ngx_int_t worker)
     /**
      * ngx_event_core_module 定义init_proccess 该ngx_event_process_init方法将
      * listening socket注册到事件驱动中，用于接收连接事件
+     * 重点内容
      */
     for (i = 0; cycle->modules[i]; i++)
     {

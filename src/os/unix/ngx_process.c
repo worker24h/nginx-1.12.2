@@ -84,18 +84,23 @@ ngx_signal_t  signals[] = {
 
 /**
  * 生成子进程
+ * @param cycle 核心结构体
+ * @param proc  子进程进程函数
+ * @param data  子进程进程函数，入参
+ * @param name  子进程进程名称
+ * @param respawn 生产子进程方式
  */
 ngx_pid_t
 ngx_spawn_process(ngx_cycle_t *cycle, ngx_spawn_proc_pt proc, void *data,
     char *name, ngx_int_t respawn)
 {
     u_long     on;
-    ngx_pid_t  pid;
-    ngx_int_t  s;
+    ngx_pid_t  pid; /* 子进程id */
+    ngx_int_t  s; /* 子进程在数组ngx_processes中索引 */
 
+    /* 确定子进程在数组ngx_processes中索引 */     
     if (respawn >= 0) {
         s = respawn;
-
     } else {
         for (s = 0; s < ngx_last_process; s++) {
             if (ngx_processes[s].pid == -1) {
@@ -115,7 +120,7 @@ ngx_spawn_process(ngx_cycle_t *cycle, ngx_spawn_proc_pt proc, void *data,
     if (respawn != NGX_PROCESS_DETACHED) {
 
         /* Solaris 9 still has no AF_LOCAL */
-
+        /* 创建socketpair 并且设置socket 选项 */
         if (socketpair(AF_UNIX, SOCK_STREAM, 0, ngx_processes[s].channel) == -1)
         {
             ngx_log_error(NGX_LOG_ALERT, cycle->log, ngx_errno,
@@ -158,7 +163,7 @@ ngx_spawn_process(ngx_cycle_t *cycle, ngx_spawn_proc_pt proc, void *data,
             ngx_close_channel(ngx_processes[s].channel, cycle->log);
             return NGX_INVALID_PID;
         }
-
+        /* FD_CLOEXEC标志 表示当执行exec家族函数时自动关闭当前文件句柄 */
         if (fcntl(ngx_processes[s].channel[0], F_SETFD, FD_CLOEXEC) == -1) {
             ngx_log_error(NGX_LOG_ALERT, cycle->log, ngx_errno,
                           "fcntl(FD_CLOEXEC) failed while spawning \"%s\"",
@@ -185,7 +190,7 @@ ngx_spawn_process(ngx_cycle_t *cycle, ngx_spawn_proc_pt proc, void *data,
     ngx_process_slot = s;
 
 
-    pid = fork();
+    pid = fork(); //创建子进程
 
     switch (pid) {
 
@@ -197,15 +202,18 @@ ngx_spawn_process(ngx_cycle_t *cycle, ngx_spawn_proc_pt proc, void *data,
 
     case 0:
         ngx_pid = ngx_getpid();//子进程 fork返回值0
-        proc(cycle, data);
+        proc(cycle, data); //子进程一直循环
         break;
 
     default://父进程 fork返回值为非0 是子进程 进程id
         break;
     }
-
+    /**
+     * 以下代码是父进程执行 子进程永远不会执行到这里. 因此子进程再退出时直接
+     * 调用exit 没有机会执行下列代码
+     */
     ngx_log_error(NGX_LOG_NOTICE, cycle->log, 0, "start %s %P", name, pid);
-
+    /* 设置子进程信息 */
     ngx_processes[s].pid = pid;
     ngx_processes[s].exited = 0;
 
