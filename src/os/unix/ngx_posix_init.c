@@ -63,7 +63,7 @@ ngx_os_init(ngx_log_t *log)
     }
 
     ngx_cpuinfo();
-
+    //ulimit -a ÖÐopen files
     if (getrlimit(RLIMIT_NOFILE, &rlmt) == -1) {
         ngx_log_error(NGX_LOG_ALERT, log, errno,
                       "getrlimit(RLIMIT_NOFILE) failed");

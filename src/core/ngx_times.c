@@ -20,7 +20,7 @@
 
 #define NGX_TIME_SLOTS   64
 
-static ngx_uint_t        slot;
+static ngx_uint_t        slot; /* 存储时间槽位 对应 NGX_TIME_SLOTS */
 static ngx_atomic_t      ngx_time_lock;
 
 volatile ngx_msec_t      ngx_current_msec;
@@ -73,7 +73,9 @@ ngx_time_init(void)
     ngx_time_update();
 }
 
-
+/**
+ * 更新时间
+ */
 void
 ngx_time_update(void)
 {
@@ -84,25 +86,25 @@ ngx_time_update(void)
     ngx_time_t      *tp;
     struct timeval   tv;
 
-    if (!ngx_trylock(&ngx_time_lock)) {
+    if (!ngx_trylock(&ngx_time_lock)) {//加锁操作
         return;
     }
 
-    ngx_gettimeofday(&tv);
+    ngx_gettimeofday(&tv);//获取当前系统时间 系统调用
 
     sec = tv.tv_sec;
-    msec = tv.tv_usec / 1000;
+    msec = tv.tv_usec / 1000; //微妙转毫秒
 
     ngx_current_msec = (ngx_msec_t) sec * 1000 + msec;
 
     tp = &cached_time[slot];
 
-    if (tp->sec == sec) {
+    if (tp->sec == sec) {//表示此次更新 秒级时间相同 只需要更新毫秒即可退出
         tp->msec = msec;
         ngx_unlock(&ngx_time_lock);
         return;
     }
-
+    /* 当秒级时间不一致则修改存储操作 */
     if (slot == NGX_TIME_SLOTS - 1) {
         slot = 0;
     } else {
@@ -116,7 +118,7 @@ ngx_time_update(void)
 
     ngx_gmtime(sec, &gmt);
 
-
+    /* 更新所有时间字符串 */
     p0 = &cached_http_time[slot][0];
 
     (void) ngx_sprintf(p0, "%s, %02d %s %4d %02d:%02d:%02d GMT",
@@ -185,7 +187,7 @@ ngx_time_update(void)
     ngx_cached_http_log_iso8601.data = p3;
     ngx_cached_syslog_time.data = p4;
 
-    ngx_unlock(&ngx_time_lock);
+    ngx_unlock(&ngx_time_lock);//释放锁
 }
 
 

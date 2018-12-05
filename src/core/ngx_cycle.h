@@ -38,9 +38,10 @@ struct ngx_cycle_s
       * 第二层数组下标，是ngx_module_t.ctx_index
       * 返回配置结构体，每个模块都一个配置模块结构体(自定义). 
       * 由create_conf回调创建出来的配置结构体
+      * 注: conf_ctx是一个数组，大小与ngx_modules一样 初始化在函数ngx_init_cycle
       */
     void ****conf_ctx;
-    ngx_pool_t *pool;
+    ngx_pool_t *pool; /* 进程级内存池 */
 
     ngx_log_t *log;
     ngx_log_t new_log;
@@ -48,17 +49,17 @@ struct ngx_cycle_s
     ngx_uint_t log_use_stderr; /* unsigned  log_use_stderr:1; */
 
     ngx_connection_t **files;
-    ngx_connection_t *free_connections;
-    ngx_uint_t free_connection_n;
+    ngx_connection_t *free_connections; /* 空闲连接 */
+    ngx_uint_t free_connection_n; /* 空闲连接数 */
 
-    ngx_module_t **modules; /* 鎸囬拡鏁扮粍 瀛樺偍ngx_modules.c 鍒濆鍖栧湪ngx_cycle_modules*/
+    ngx_module_t **modules; /* 实际指向ngx_modules.c中ngx_modules */
     ngx_uint_t modules_n;
     ngx_uint_t modules_used; /* unsigned  modules_used:1; */
 
-    ngx_queue_t reusable_connections_queue;
+    ngx_queue_t reusable_connections_queue; /* 双向链表 空闲connections 可重复使用 */
     ngx_uint_t reusable_connections_n;
 
-    ngx_array_t listening;
+    ngx_array_t listening; /* 动态数组 监听socket */
     ngx_array_t paths;
 
     ngx_array_t config_dump;
@@ -68,7 +69,7 @@ struct ngx_cycle_s
     ngx_list_t open_files;
     ngx_list_t shared_memory;
 
-    ngx_uint_t connection_n;
+    ngx_uint_t connection_n; /* 当前活跃连接数 */
     ngx_uint_t files_n;
 
     /* 三者对应关系是 按照数组下标对应 */
@@ -78,10 +79,10 @@ struct ngx_cycle_s
 
     ngx_cycle_t *old_cycle;
 
-    ngx_str_t conf_file;
+    ngx_str_t conf_file; /* 默认/usr/local/nginx/conf/nginx.conf */
     ngx_str_t conf_param;
-    ngx_str_t conf_prefix;
-    ngx_str_t prefix;
+    ngx_str_t conf_prefix; /* 默认/usr/local/nginx/conf/ */
+    ngx_str_t prefix; /* /usr/local/nginx/ */
     ngx_str_t lock_file;
     ngx_str_t hostname;
 };

@@ -18,39 +18,39 @@ typedef void *            ngx_buf_tag_t;
 typedef struct ngx_buf_s  ngx_buf_t;
 
 struct ngx_buf_s {
-    u_char          *pos;
-    u_char          *last;
-    off_t            file_pos;
-    off_t            file_last;
+    u_char          *pos; /* 待处理缓冲区起始位置 */
+    u_char          *last;/* 待处理缓冲区最后一个位置 last - pos = 实际有效内容 */
+    off_t            file_pos; /* 文件处理 起始位置 */
+    off_t            file_last; /* 文件处理 最后一个位置  */
 
-    u_char          *start;         /* start of buffer */
-    u_char          *end;           /* end of buffer */
-    ngx_buf_tag_t    tag;
-    ngx_file_t      *file;
-    ngx_buf_t       *shadow;
+    u_char          *start;         /* start of buffer 缓冲区起始地址 */
+    u_char          *end;           /* end of buffer 缓冲区结束地址 */
+    ngx_buf_tag_t    tag; /* 使用buf的模块设置，通常设置为函数指针 */
+    ngx_file_t      *file; /* 当buf指向文件时，设置文件结构 */
+    ngx_buf_t       *shadow; /* 影子缓冲区 为了节约内存不会重新申请一块内存 而是只申请一个头部信息 */
 
 
     /* the buf's content could be changed */
-    unsigned         temporary:1;
+    unsigned         temporary:1; /* buf指向临时内存 内存数据可以进行修改 */
 
     /*
      * the buf's content is in a memory cache or in a read only memory
      * and must not be changed
      */
-    unsigned         memory:1;
+    unsigned         memory:1; /* buf指向内存数据 只读 */
 
     /* the buf's content is mmap()ed and must not be changed */
-    unsigned         mmap:1;
+    unsigned         mmap:1; /* buf指向共享内存map 数据是只读 */
 
-    unsigned         recycled:1;
-    unsigned         in_file:1;
-    unsigned         flush:1;
-    unsigned         sync:1;
-    unsigned         last_buf:1;
-    unsigned         last_in_chain:1;
+    unsigned         recycled:1; /* 表示可重复使用 */
+    unsigned         in_file:1; /* 表示buf指向文件 */
+    unsigned         flush:1; /* 表示进行flush操作 */
+    unsigned         sync:1; /* 是否需要进行同步操作 会阻塞Nginx进程 */
+    unsigned         last_buf:1; /* 表示是否为最后一个buf 需要结合ngx_chain_t */
+    unsigned         last_in_chain:1; /* 表示在chain中是否为最后一个buf */
 
-    unsigned         last_shadow:1;
-    unsigned         temp_file:1;
+    unsigned         last_shadow:1; /* 最后一个影子buf */
+    unsigned         temp_file:1; /* 是否为临时文件 */
 
     /* STUB */ int   num;
 };
@@ -63,8 +63,8 @@ struct ngx_chain_s {
 
 
 typedef struct {
-    ngx_int_t    num;
-    size_t       size;
+    ngx_int_t    num; /* 有多少个buf */
+    size_t       size; /* 每个buf大小是多少 */
 } ngx_bufs_t;
 
 

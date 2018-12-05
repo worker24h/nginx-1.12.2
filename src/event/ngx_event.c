@@ -232,7 +232,10 @@ void ngx_process_events_and_timers(ngx_cycle_t *cycle)
     }
 
     delta = ngx_current_msec;
-    //如果是epoll模型 此处实际调用函数是ngx_epoll_process_events    
+    /**
+     * 如果是epoll模型 此处实际调用函数是ngx_epoll_process_events
+     * 阻塞在epoll_wait
+     */    
     (void)ngx_process_events(cycle, timer, flags);
 
     delta = ngx_current_msec - delta;
@@ -257,7 +260,11 @@ void ngx_process_events_and_timers(ngx_cycle_t *cycle)
 
     ngx_event_process_posted(cycle, &ngx_posted_events);
 }
-
+/**
+ * 添加读事件到事件驱动
+ * @param rev 事件对象
+ * @param flags 对于epoll模型该参数没有意义
+ */
 ngx_int_t
 ngx_handle_read_event(ngx_event_t *rev, ngx_uint_t flags)
 {
@@ -268,6 +275,10 @@ ngx_handle_read_event(ngx_event_t *rev, ngx_uint_t flags)
 
         if (!rev->active && !rev->ready)
         {
+            /**
+             * epoll模型下面  NGX_CLEAR_EVENT  EPOLLET 
+             * kqueue模型下面 NGX_CLEAR_EVENT  EV_CLEAR
+             */
             if (ngx_add_event(rev, NGX_READ_EVENT, NGX_CLEAR_EVENT) == NGX_ERROR)
             {
                 return NGX_ERROR;
@@ -899,7 +910,7 @@ ngx_event_process_init(ngx_cycle_t *cycle)
         }
 
 #endif
-        //注册读事件
+        //注册读事件 主要是用于listen监听
         if (ngx_add_event(rev, NGX_READ_EVENT, 0) == NGX_ERROR)
         {
             return NGX_ERROR;
@@ -946,6 +957,9 @@ ngx_send_lowat(ngx_connection_t *c, size_t lowat)
     return NGX_OK;
 }
 
+/**
+ *
+ */
 static char *
 ngx_events_block(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 {
@@ -961,7 +975,7 @@ ngx_events_block(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
     }
 
     /* count the number of the event modules and set up their indices */
-
+    /* 获取所有event模块数量并且设置他们的索引值ctx_index             */
     ngx_event_max_module = ngx_count_modules(cf->cycle, NGX_EVENT_MODULE);
 
     ctx = ngx_pcalloc(cf->pool, sizeof(void *));

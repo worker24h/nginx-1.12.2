@@ -58,7 +58,7 @@ struct ngx_pool_s {
     ngx_pool_data_t       d; /* 当前内存池元数据 */
     size_t                max; /* 申请空间大于max则表示需要申请大内存，只在创建内存池时赋值 */
     ngx_pool_t           *current; /* current用于加速遍历 */
-    ngx_chain_t          *chain;
+    ngx_chain_t          *chain; /* 在http filter模块中使用 主要用于http response */
     ngx_pool_large_t     *large;  /* 大内存 */
     ngx_pool_cleanup_t   *cleanup;  /* 设置回调 ngx_pool_cleanup_add */
     ngx_log_t            *log;

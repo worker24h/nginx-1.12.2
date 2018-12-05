@@ -316,8 +316,8 @@ void ngx_http_init_connection(ngx_connection_t *c)
     c->log_error = NGX_ERROR_INFO;
 
     rev = c->read;
-    rev->handler = ngx_http_wait_request_handler;
-    c->write->handler = ngx_http_empty_handler;
+    rev->handler = ngx_http_wait_request_handler; /* 读事件回调函数 */
+    c->write->handler = ngx_http_empty_handler; /* 写事件回调函数 再未收到client请求不会主动发送数据 */
 
 #if (NGX_HTTP_V2)
     if (hc->addr_conf->http2)
@@ -372,10 +372,10 @@ void ngx_http_init_connection(ngx_connection_t *c)
         rev->handler(rev);
         return;
     }
-
+    //将事件添加到定时器中
     ngx_add_timer(rev, c->listening->post_accept_timeout);
     ngx_reusable_connection(c, 1);
-
+    //将读事件添加到事件驱动中 默认是epoll
     if (ngx_handle_read_event(rev, 0) != NGX_OK)
     {
         ngx_http_close_connection(c);
