@@ -27,7 +27,10 @@ ngx_int_t ngx_event_no_timers_left(void);
 
 extern ngx_rbtree_t  ngx_event_timer_rbtree;
 
-
+/**
+ * 删除定时器事件
+ * @param 待删除事件
+ */
 static ngx_inline void
 ngx_event_del_timer(ngx_event_t *ev)
 {
@@ -35,7 +38,7 @@ ngx_event_del_timer(ngx_event_t *ev)
                    "event timer del: %d: %M",
                     ngx_event_ident(ev->data), ev->timer.key);
 
-    ngx_rbtree_delete(&ngx_event_timer_rbtree, &ev->timer);
+    ngx_rbtree_delete(&ngx_event_timer_rbtree, &ev->timer);//从红黑树中删除
 
 #if (NGX_DEBUG)
     ev->timer.left = NULL;
@@ -46,7 +49,11 @@ ngx_event_del_timer(ngx_event_t *ev)
     ev->timer_set = 0;
 }
 
-
+/**
+ * 添加定时器任务
+ * @param ev 事件
+ * @param timer 等待时间 int值
+ */
 static ngx_inline void
 ngx_event_add_timer(ngx_event_t *ev, ngx_msec_t timer)
 {
@@ -55,17 +62,18 @@ ngx_event_add_timer(ngx_event_t *ev, ngx_msec_t timer)
 
     key = ngx_current_msec + timer;
 
-    if (ev->timer_set) {
+    if (ev->timer_set) {//表示在二叉树已经注册了超时事件
 
         /*
          * Use a previous timer value if difference between it and a new
          * value is less than NGX_TIMER_LAZY_DELAY milliseconds: this allows
          * to minimize the rbtree operations for fast connections.
+         * 当新事件与旧事件，时间差值小于300ms则使用旧事件 不在创建新事件
          */
 
         diff = (ngx_msec_int_t) (key - ev->timer.key);
 
-        if (ngx_abs(diff) < NGX_TIMER_LAZY_DELAY) {
+        if (ngx_abs(diff) < NGX_TIMER_LAZY_DELAY) {//沿用旧事件
             ngx_log_debug3(NGX_LOG_DEBUG_EVENT, ev->log, 0,
                            "event timer: %d, old: %M, new: %M",
                             ngx_event_ident(ev->data), ev->timer.key, key);

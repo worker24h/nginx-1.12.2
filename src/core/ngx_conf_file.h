@@ -73,11 +73,13 @@
 
 #define NGX_MAX_CONF_ERRSTR  1024
 
-
+/**
+ * 命令字解析
+ */
 struct ngx_command_s {
-    ngx_str_t             name;
-    ngx_uint_t            type;
-    char               *(*set)(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
+    ngx_str_t             name; /* 标签名字 即出现nginx*/
+    ngx_uint_t            type; /* 该命令字所属范围 */
+    char               *(*set)(ngx_conf_t *cf, ngx_command_t *cmd, void *conf); /* 解析命令字回调函数 */
     ngx_uint_t            conf;
     ngx_uint_t            offset;
     void                 *post;

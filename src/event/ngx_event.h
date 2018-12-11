@@ -62,8 +62,8 @@ struct ngx_event_s
     unsigned eof : 1;
     unsigned error : 1;
 
-    unsigned timedout : 1;
-    unsigned timer_set : 1;
+    unsigned timedout : 1; /* 1表示已经超时 */
+    unsigned timer_set : 1;/* 1表示定时器事件 */
 
     unsigned delayed : 1;
 
@@ -80,7 +80,7 @@ struct ngx_event_s
     unsigned channel : 1;
     unsigned resolver : 1;
 
-    unsigned cancelable : 1;
+    unsigned cancelable : 1; /* 表示事件是否取消 */
 
 #if (NGX_HAVE_KQUEUE)
     unsigned kq_vnode : 1;
@@ -123,7 +123,7 @@ struct ngx_event_s
 
     ngx_log_t *log;
 
-    ngx_rbtree_node_t timer;
+    ngx_rbtree_node_t timer; /* 红黑树节点 */
 
     /* the posted queue */
     ngx_queue_t queue;

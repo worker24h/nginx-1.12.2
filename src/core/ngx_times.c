@@ -23,7 +23,7 @@
 static ngx_uint_t        slot; /* 存储时间槽位 对应 NGX_TIME_SLOTS */
 static ngx_atomic_t      ngx_time_lock;
 
-volatile ngx_msec_t      ngx_current_msec;
+volatile ngx_msec_t      ngx_current_msec; /* 赋值只有一处 ngx_time_update 毫秒*/
 volatile ngx_time_t     *ngx_cached_time;
 volatile ngx_str_t       ngx_cached_err_log_time;
 volatile ngx_str_t       ngx_cached_http_time;
@@ -74,7 +74,7 @@ ngx_time_init(void)
 }
 
 /**
- * 更新时间
+ * 更新时间缓存
  */
 void
 ngx_time_update(void)

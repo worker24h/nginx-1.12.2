@@ -21,7 +21,7 @@ ngx_int_t
 ngx_preinit_modules(void)
 {
     ngx_uint_t i;
-    // ngx_modules æ•°ç»„å®šä¹‰ngx_modules.c è¯¥æ–‡ä»¶åœ¨configureè¿‡ç¨‹ä¸­è‡ªåŠ¨ç”Ÿæˆ
+    // ngx_modules Êý×é¶¨Òångx_modules.c ¸ÃÎÄ¼þÔÚconfigure¹ý³ÌÖÐ×Ô¶¯Éú³É
     for (i = 0; ngx_modules[i]; i++)
     {
         ngx_modules[i]->index = i;
@@ -35,8 +35,8 @@ ngx_preinit_modules(void)
 }
 
 /**
- * åˆå§‹åŒ–module æ‹·è´ngx_modules
- * @param cycle cycleå¯¹è±¡
+ * ³õÊ¼»¯module ¿½±´ngx_modules
+ * @param cycle cycle¶ÔÏó
  */
 ngx_int_t
 ngx_cycle_modules(ngx_cycle_t *cycle)
@@ -68,7 +68,7 @@ ngx_init_modules(ngx_cycle_t *cycle)
     for (i = 0; cycle->modules[i]; i++)
     {
         if (cycle->modules[i]->init_module)
-        {//åªæœ‰è¿™ä¸¤ä¸ªæ¨¡å—å®žçŽ°äº†init_module ngx_event_core_module  ngx_regex_module
+        {//Ö»ÓÐÕâÁ½¸öÄ£¿éÊµÏÖÁËinit_module ngx_event_core_module  ngx_regex_module
             if (cycle->modules[i]->init_module(cycle) != NGX_OK)
             {
                 return NGX_ERROR;
@@ -80,11 +80,11 @@ ngx_init_modules(ngx_cycle_t *cycle)
 }
 
 /**
- * èŽ·å–ç›¸åŒç±»åž‹ä¸‹moduleæ•°é‡
- * @param cycle æ ¸å¿ƒç»“æž„ä½“
- * @param type  æ¨¡å—ç±»åž‹ ä¾‹å¦‚NGX_EVENT_MODULE,NGX_HTTP_MODULE
- * @return è¿”å›žæ•°é‡
- * æ³¨æ„æ­¤æ–¹æ³•ï¼Œè¿˜ä¼šè®¾ç½®å­ç±»åž‹ç´¢å¼• å³åœ¨ç›¸åŒmoduleç±»åž‹ä¸‹ctx_index
+ * »ñÈ¡ÏàÍ¬ÀàÐÍÏÂmoduleÊýÁ¿
+ * @param cycle ºËÐÄ½á¹¹Ìå
+ * @param type  Ä£¿éÀàÐÍ ÀýÈçNGX_EVENT_MODULE,NGX_HTTP_MODULE
+ * @return ·µ»ØÊýÁ¿
+ * ×¢Òâ´Ë·½·¨£¬»¹»áÉèÖÃ×ÓÀàÐÍË÷Òý ¼´ÔÚÏàÍ¬moduleÀàÐÍÏÂctx_index
  */
 ngx_int_t
 ngx_count_modules(ngx_cycle_t *cycle, ngx_uint_t type)
@@ -107,7 +107,7 @@ ngx_count_modules(ngx_cycle_t *cycle, ngx_uint_t type)
         }
 
         if (module->ctx_index != NGX_MODULE_UNSET_INDEX)
-        {//è¡¨ç¤ºå½“å‰moduleå·²ç»è®¾ç½®è¿‡ctx_index
+        {//±íÊ¾µ±Ç°moduleÒÑ¾­ÉèÖÃ¹ýctx_index
 
             /* if ctx_index was assigned, preserve it */
 
@@ -125,7 +125,7 @@ ngx_count_modules(ngx_cycle_t *cycle, ngx_uint_t type)
         }
 
         /* search for some free index */
-        /* è®¾ç½®å­ç±»åž‹ ç´¢å¼• */
+        /* ÉèÖÃ×ÓÀàÐÍ Ë÷Òý */
         module->ctx_index = ngx_module_ctx_index(cycle, type, next);
 
         if (module->ctx_index > max)

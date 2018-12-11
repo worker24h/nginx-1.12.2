@@ -822,7 +822,7 @@ ngx_worker_process_cycle(ngx_cycle_t *cycle, void *data)
         if (ngx_exiting)
         {
             if (ngx_event_no_timers_left() == NGX_OK)
-            {
+            {//表示所有定时器任务均已经取消
                 ngx_log_error(NGX_LOG_NOTICE, cycle->log, 0, "exiting");
                 ngx_worker_process_exit(cycle);
             }

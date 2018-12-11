@@ -28,17 +28,20 @@ ngx_event_timer_init(ngx_log_t *log)
     return NGX_OK;
 }
 
-
+/**
+ * 查找时间最小的那个树节点 用于epoll等待时间
+ * @return 当返回-1 表示永久阻塞
+ */
 ngx_msec_t
 ngx_event_find_timer(void)
 {
     ngx_msec_int_t      timer;
     ngx_rbtree_node_t  *node, *root, *sentinel;
 
-    if (ngx_event_timer_rbtree.root == &ngx_event_timer_sentinel) {
-        return NGX_TIMER_INFINITE;
+    if (ngx_event_timer_rbtree.root == &ngx_event_timer_sentinel) {//表示没有定时任务
+        return NGX_TIMER_INFINITE;//返回永久
     }
-
+    /* 找到最近要超时的事件 并且返回它所包含的时间 */
     root = ngx_event_timer_rbtree.root;
     sentinel = ngx_event_timer_rbtree.sentinel;
 
@@ -49,7 +52,9 @@ ngx_event_find_timer(void)
     return (ngx_msec_t) (timer > 0 ? timer : 0);
 }
 
-
+/**
+ * 循环遍历 注册的超时事件
+ */
 void
 ngx_event_expire_timers(void)
 {
@@ -72,14 +77,14 @@ ngx_event_expire_timers(void)
         if ((ngx_msec_int_t) (node->key - ngx_current_msec) > 0) {
             return;
         }
-
+        /* 获取event事件 */
         ev = (ngx_event_t *) ((char *) node - offsetof(ngx_event_t, timer));
 
         ngx_log_debug2(NGX_LOG_DEBUG_EVENT, ev->log, 0,
                        "event timer del: %d: %M",
                        ngx_event_ident(ev->data), ev->timer.key);
 
-        ngx_rbtree_delete(&ngx_event_timer_rbtree, &ev->timer);
+        ngx_rbtree_delete(&ngx_event_timer_rbtree, &ev->timer); /* 从树中摘除树节点 */
 
 #if (NGX_DEBUG)
         ev->timer.left = NULL;
@@ -91,11 +96,13 @@ ngx_event_expire_timers(void)
 
         ev->timedout = 1;
 
-        ev->handler(ev);
+        ev->handler(ev);//执行超时处理事件
     }
 }
 
-
+/**
+ * 遍历二叉树 查看timer是否都为cancleable
+ */
 ngx_int_t
 ngx_event_no_timers_left(void)
 {

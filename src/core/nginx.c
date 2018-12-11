@@ -714,7 +714,7 @@ ngx_exec_new_binary(ngx_cycle_t *cycle, char *const *argv)
         return NGX_INVALID_PID;
     }
 
-    pid = ngx_execute(cycle, &ctx);
+    pid = ngx_execute(cycle, &ctx);/* 执行exec家族函数 启动新进程 */
 
     if (pid == NGX_INVALID_PID) {
         if (ngx_rename_file(ccf->oldpid.data, ccf->pid.data)

@@ -29,7 +29,7 @@ static char *ngx_event_debug_connection(ngx_conf_t *cf, ngx_command_t *cmd,
 
 static void *ngx_event_core_create_conf(ngx_cycle_t *cycle);
 static char *ngx_event_core_init_conf(ngx_cycle_t *cycle, void *conf);
-
+/* 用户可以通过nginx.conf设置timer_resolution 规定时间精度 单位ms */
 static ngx_uint_t ngx_timer_resolution;
 sig_atomic_t ngx_event_timer_alarm;
 
@@ -73,6 +73,9 @@ ngx_atomic_t *ngx_stat_waiting = &ngx_stat_waiting0;
 
 #endif
 
+/** 
+ * 解析命令字 即解析配置文件 当配置文件出现标签events时调用ngx_events_block方法 
+ */
 static ngx_command_t ngx_events_commands[] = {
 
     {ngx_string("events"),
@@ -84,16 +87,22 @@ static ngx_command_t ngx_events_commands[] = {
 
     ngx_null_command};
 
+/**
+ * 定义模块上下文，当我们新增核心模块时，需要指定ngx_core_module_t作为上下文
+ */
 static ngx_core_module_t ngx_events_module_ctx = {
     ngx_string("events"),
     NULL,
     ngx_event_init_conf};
 
+/**
+ * 模块定义--事件模块
+ */
 ngx_module_t ngx_events_module = {
     NGX_MODULE_V1,
     &ngx_events_module_ctx, /* module context */
     ngx_events_commands,    /* module directives */
-    NGX_CORE_MODULE,        /* module type */
+    NGX_CORE_MODULE,        /* module type  事件模块作为核心模块 */
     NULL,                   /* init master */
     NULL,                   /* init module */
     NULL,                   /* init process */
@@ -182,14 +191,15 @@ void ngx_process_events_and_timers(ngx_cycle_t *cycle)
     ngx_msec_t timer, delta;
 
     if (ngx_timer_resolution)
-    {
+    {//用户指定时间精度，超时事件由SIGALARM触发
         timer = NGX_TIMER_INFINITE;
         flags = 0;
     }
     else
     {
+        //获取下一个超时时间 如果二叉树中没有超时事件则返回-1 代表永久不超时
         timer = ngx_event_find_timer();
-        flags = NGX_UPDATE_TIME;
+        flags = NGX_UPDATE_TIME; //表示需要更新时间缓存
 
 #if (NGX_WIN32)
 
@@ -231,14 +241,16 @@ void ngx_process_events_and_timers(ngx_cycle_t *cycle)
         }
     }
 
+    /* 记录时间差 */
     delta = ngx_current_msec;
+    
     /**
      * 如果是epoll模型 此处实际调用函数是ngx_epoll_process_events
      * 阻塞在epoll_wait
      */    
     (void)ngx_process_events(cycle, timer, flags);
 
-    delta = ngx_current_msec - delta;
+    delta = ngx_current_msec - delta; /* 记录时间差 */
 
     ngx_log_debug1(NGX_LOG_DEBUG_EVENT, cycle->log, 0,
                    "timer delta: %M", delta);
@@ -254,7 +266,7 @@ void ngx_process_events_and_timers(ngx_cycle_t *cycle)
     }
 
     if (delta)
-    {
+    {//时间差 表示时间超时，需要处理超时事件
         ngx_event_expire_timers();
     }
 
@@ -681,7 +693,7 @@ ngx_event_process_init(ngx_cycle_t *cycle)
         itv.it_interval.tv_usec = (ngx_timer_resolution % 1000) * 1000;
         itv.it_value.tv_sec = ngx_timer_resolution / 1000;
         itv.it_value.tv_usec = (ngx_timer_resolution % 1000) * 1000;
-
+        //启动定时器 当超时后会产生SIGALRM信号
         if (setitimer(ITIMER_REAL, &itv, NULL) == -1)
         {
             ngx_log_error(NGX_LOG_ALERT, cycle->log, ngx_errno,
@@ -958,7 +970,10 @@ ngx_send_lowat(ngx_connection_t *c, size_t lowat)
 }
 
 /**
- *
+ * 针对events标签进行解析
+ * @param cf  配置结构
+ * @param cmd 命令字映射表
+ * @param conf 配置结构
  */
 static char *
 ngx_events_block(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
@@ -991,7 +1006,7 @@ ngx_events_block(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
     }
 
     *(void **)conf = ctx;
-
+    /* 调用模块的create_conf方法，模块类型必须是NGX_EVENT_MODULE */
     for (i = 0; cf->cycle->modules[i]; i++)
     {
         if (cf->cycle->modules[i]->type != NGX_EVENT_MODULE)
@@ -1002,7 +1017,7 @@ ngx_events_block(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
         m = cf->cycle->modules[i]->ctx;
 
         if (m->create_conf)
-        {
+        {// ctx_index是在上方ngx_count_modules中设置
             (*ctx)[cf->cycle->modules[i]->ctx_index] =
                 m->create_conf(cf->cycle);
             if ((*ctx)[cf->cycle->modules[i]->ctx_index] == NULL)
@@ -1025,7 +1040,7 @@ ngx_events_block(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
     {
         return rv;
     }
-
+    /* 调用模块的init_conf方法，模块类型必须是NGX_EVENT_MODULE */
     for (i = 0; cf->cycle->modules[i]; i++)
     {
         if (cf->cycle->modules[i]->type != NGX_EVENT_MODULE)
@@ -1255,7 +1270,10 @@ ngx_event_debug_connection(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 
     return NGX_CONF_OK;
 }
-
+/**
+ * 创建event conf结构
+ * @param cycle 核心结构体
+ */
 static void *
 ngx_event_core_create_conf(ngx_cycle_t *cycle)
 {
@@ -1266,7 +1284,7 @@ ngx_event_core_create_conf(ngx_cycle_t *cycle)
     {
         return NULL;
     }
-
+    /* 与命令字保持一致 */
     ecf->connections = NGX_CONF_UNSET_UINT;
     ecf->use = NGX_CONF_UNSET_UINT;
     ecf->multi_accept = NGX_CONF_UNSET;

@@ -497,7 +497,7 @@ ngx_conf_handler(ngx_conf_t *cf, ngx_int_t last)
                 }
             }
 
-            rv = cmd->set(cf, cmd, conf); //æ‰§è¡Œè§£æé…ç½®é¡¹
+            rv = cmd->set(cf, cmd, conf); //Ö´ĞĞ½âÎöÅäÖÃÏî
 
             if (rv == NGX_CONF_OK)
             {

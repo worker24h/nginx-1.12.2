@@ -234,7 +234,7 @@ struct ngx_module_s {
      */
     ngx_uint_t            index;
 
-    char                 *name;
+    char                 *name; //模块名称
 
     ngx_uint_t            spare0;
     ngx_uint_t            spare1;
@@ -244,13 +244,13 @@ struct ngx_module_s {
     
     /** 模块定义时指定
      * 不同模块实际指向不同，例如:
-     * NGX_CORE_MODULE 指向的ngx_core_module_t
-     * NGX_EVENT_MODULE 指向的ngx_event_module_t
-     * NGX_HTTP_MODULE 指向的ngx_http_module_t
+     * NGX_CORE_MODULE 指向的结构体ngx_core_module_t
+     * NGX_EVENT_MODULE 指向的结构体ngx_event_module_t
+     * NGX_HTTP_MODULE 指向的结构体ngx_http_module_t
      */
     void                 *ctx;
-    ngx_command_t        *commands;
-    ngx_uint_t            type;
+    ngx_command_t        *commands; // 配置文件解析映射表
+    ngx_uint_t            type; // 指定模块类型
 
     ngx_int_t           (*init_master)(ngx_log_t *log);//目前没有使用
 
@@ -263,7 +263,7 @@ struct ngx_module_s {
 
     void                (*exit_master)(ngx_cycle_t *cycle);
 
-    uintptr_t             spare_hook0;
+    uintptr_t             spare_hook0; // 保留
     uintptr_t             spare_hook1;
     uintptr_t             spare_hook2;
     uintptr_t             spare_hook3;
@@ -273,9 +273,12 @@ struct ngx_module_s {
     uintptr_t             spare_hook7;
 };
 
-
+/**
+ * 核心模块(NGX_CORE_MODULE),上下文
+ * 所有核心模块的上下均为该接口
+ */
 typedef struct {
-    ngx_str_t             name;
+    ngx_str_t             name; /* 与配置文件nginx.conf中出现的标签保持一致 */
     void               *(*create_conf)(ngx_cycle_t *cycle);
     char               *(*init_conf)(ngx_cycle_t *cycle, void *conf);
 } ngx_core_module_t;

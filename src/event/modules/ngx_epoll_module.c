@@ -825,13 +825,28 @@ ngx_epoll_process_events(ngx_cycle_t *cycle, ngx_msec_t timer, ngx_uint_t flags)
     ngx_log_debug1(NGX_LOG_DEBUG_EVENT, cycle->log, 0,
                    "epoll timer: %M", timer);
 
-    events = epoll_wait(ep, event_list, (int)nevents, timer);//默认一分钟
+   /**
+     * timer不是固定不变的，如果没有任何事件发生(空闲期)，
+     * timer可能是NGX_TIMER_INFINITE 即表示永久阻塞
+     */
+    events = epoll_wait(ep, event_list, (int)nevents, timer);
 
     err = (events == -1) ? ngx_errno : 0;
 
+    /**
+     * Nginx两种时间策略: 
+     *   1、如果nginx.conf文件中定义时间精度timer_resolution，则表示nginx的时间
+     *      缓存精确到ngx_timer_resolution毫秒
+     *   2、如果没有定义时间精度 则严格按照系统时间
+     * ----------------------------------------------------------------
+     * 条件说明:
+     *     flags & NGX_UPDATE_TIME  -- 表示强制更新系统时间
+     *     ngx_event_timer_alarm  当采用时间精度时，nginx会启动一个定时器，每次
+     *                            超时，都会产生SIGALRM信号。具体参考ngx_event_process_init
+     */
     if (flags & NGX_UPDATE_TIME || ngx_event_timer_alarm)
     {
-        ngx_time_update();
+        ngx_time_update(); //更新时间缓存
     }
 
     if (err)
@@ -871,7 +886,7 @@ ngx_epoll_process_events(ngx_cycle_t *cycle, ngx_msec_t timer, ngx_uint_t flags)
     for (i = 0; i < events; i++)
     {
         c = event_list[i].data.ptr;
-
+        /* 指针变量 最后一位始终为0  节省内存空间 */
         instance = (uintptr_t)c & 1;
         c = (ngx_connection_t *)((uintptr_t)c & (uintptr_t)~1);
 

@@ -280,6 +280,10 @@ ngx_execute_proc(ngx_cycle_t *cycle, void *data)
 {
     ngx_exec_ctx_t  *ctx = data;
 
+    /**
+     * 如果执行成功则函数不会返回，执行失败则直接返回-1，失败原因存于errno 中
+     * 当执行成功之后进程上下文就会切换，因此也没有必要返回
+     */
     if (execve(ctx->path, ctx->argv, ctx->envp) == -1) {
         ngx_log_error(NGX_LOG_ALERT, cycle->log, ngx_errno,
                       "execve() failed while executing %s \"%s\"",
