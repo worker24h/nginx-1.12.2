@@ -28,7 +28,12 @@ typedef struct
  */
 struct ngx_event_s
 {
-    void *data; /* 指向ngx_connection_t */
+    /**
+     * data实际指向有如下情况:
+     * 1、ngx_connection_t 
+     * 2、ngx_event_handler_pt
+     */
+    void *data;
 
     unsigned write : 1;
 

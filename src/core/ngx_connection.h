@@ -119,9 +119,13 @@ typedef enum {
 
 
 struct ngx_connection_s {
-    void               *data;
-    ngx_event_t        *read;   /* 对应ngx_cycle_t中read_events数组中一个元素 */
-    ngx_event_t        *write;  /* 对应ngx_cycle_t中write_events数组中一个元素 */
+    /**
+     * data指向的下一个connection对象
+     * 由于connection对象在核心结构体中是以数组方式存在，赋值函数ngx_event_process_init
+     */
+    void               *data;  
+    ngx_event_t        *read;  /* 对应ngx_cycle_t中read_events数组中一个元素 赋值函数ngx_event_process_init */
+    ngx_event_t        *write; /* 对应ngx_cycle_t中write_events数组中一个元素 赋值函数ngx_event_process_init */
 
     ngx_socket_t        fd;
 
@@ -130,7 +134,7 @@ struct ngx_connection_s {
     ngx_recv_chain_pt   recv_chain;
     ngx_send_chain_pt   send_chain;
 
-    ngx_listening_t    *listening;
+    ngx_listening_t    *listening; /* 指向监听的socket对象 */
 
     off_t               sent;
 

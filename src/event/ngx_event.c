@@ -468,7 +468,7 @@ ngx_event_module_init(ngx_cycle_t *cycle)
     ngx_time_t *tp;
     ngx_core_conf_t *ccf;
     ngx_event_conf_t *ecf;
-
+    /* 获取顶级类型的conf 再获取子级conf */
     cf = ngx_get_conf(cycle->conf_ctx, ngx_events_module);
     ecf = (*cf)[ngx_event_core_module.ctx_index];
 
@@ -536,7 +536,7 @@ ngx_event_module_init(ngx_cycle_t *cycle)
             + cl; /* ngx_stat_waiting */
 
 #endif
-
+    /* 分配共享内存 调用mmap */
     shm.size = size;
     ngx_str_set(&shm.name, "nginx_shared_zone");
     shm.log = cycle->log;
@@ -547,7 +547,7 @@ ngx_event_module_init(ngx_cycle_t *cycle)
     }
 
     shared = shm.addr;
-
+    /* 初始化共享内存 共享内存主要用进程间通信 */
     ngx_accept_mutex_ptr = (ngx_atomic_t *)shared;
     ngx_accept_mutex.spin = (ngx_uint_t)-1; //对于解决惊群问题 spin设置为-1 保证进程不睡眠
 
@@ -637,10 +637,10 @@ ngx_event_process_init(ngx_cycle_t *cycle)
     ngx_use_accept_mutex = 0;
 
 #endif
-
-    ngx_queue_init(&ngx_posted_accept_events);
-    ngx_queue_init(&ngx_posted_events);
-
+    /* 初始化全局队列 保存接收到网络事件 */
+    ngx_queue_init(&ngx_posted_accept_events); //保存accept事件 优先级高
+    ngx_queue_init(&ngx_posted_events); //除accept事件以外的 优先级低
+    /* 初始化定时器红黑树 */
     if (ngx_event_timer_init(cycle->log) == NGX_ERROR)
     {
         return NGX_ERROR;
@@ -658,8 +658,11 @@ ngx_event_process_init(ngx_cycle_t *cycle)
             continue;
         }
 
-        module = cycle->modules[m]->ctx;
-
+        /**
+         * 在任何操作系统下 运行Nginx 网络模型始终有一个 所以下面直接break 
+         * linux系统下面是epoll模型，init回调方法是ngx_epoll_init
+         */
+        module = cycle->modules[m]->ctx;            
         if (module->actions.init(cycle, ngx_timer_resolution) != NGX_OK)
         {
             /* fatal */
@@ -733,7 +736,7 @@ ngx_event_process_init(ngx_cycle_t *cycle)
     }
 
 #endif
-
+    /* 创建连接池 默认1024 */
     cycle->connections =
         ngx_alloc(sizeof(ngx_connection_t) * cycle->connection_n, cycle->log);
     if (cycle->connections == NULL)
@@ -742,7 +745,7 @@ ngx_event_process_init(ngx_cycle_t *cycle)
     }
 
     c = cycle->connections;
-
+    /* 为每个连接创建一个读事件队列 保存在核心结构体 */
     cycle->read_events = ngx_alloc(sizeof(ngx_event_t) * cycle->connection_n,
                                    cycle->log);
     if (cycle->read_events == NULL)
@@ -756,7 +759,7 @@ ngx_event_process_init(ngx_cycle_t *cycle)
         rev[i].closed = 1;
         rev[i].instance = 1;
     }
-
+    /* 为每个连接创建一个写事件队列 保存在核心结构体 */
     cycle->write_events = ngx_alloc(sizeof(ngx_event_t) * cycle->connection_n,
                                     cycle->log);
     if (cycle->write_events == NULL)
@@ -769,7 +772,7 @@ ngx_event_process_init(ngx_cycle_t *cycle)
     {
         wev[i].closed = 1;
     }
-
+    /* 初始化连接connection对象 */
     i = cycle->connection_n;
     next = NULL;
 
@@ -784,12 +787,14 @@ ngx_event_process_init(ngx_cycle_t *cycle)
 
         next = &c[i];
     } while (i);
-
+    /* 可用连接connection设置 */
     cycle->free_connections = next;
     cycle->free_connection_n = cycle->connection_n;
 
-    /* for each listening socket */
-
+    /**
+     * for each listening socket 
+     * 循环遍历listening 将listen socket 与connection对象进行绑定
+     */
     ls = cycle->listening.elts;
     for (i = 0; i < cycle->listening.nelts; i++)
     {
@@ -800,7 +805,7 @@ ngx_event_process_init(ngx_cycle_t *cycle)
             continue;
         }
 #endif
-
+        /* 返回可用连接对象 这里listening socket也会占用一个connection对象 */
         c = ngx_get_connection(ls[i].fd, cycle->log);
 
         if (c == NULL)
@@ -1309,7 +1314,7 @@ static char *
 ngx_event_core_init_conf(ngx_cycle_t *cycle, void *conf)
 {
     ngx_event_conf_t *ecf = conf;
-
+    /* linux下面使用epoll模型 */
 #if (NGX_HAVE_EPOLL) && !(NGX_TEST_BUILD_EPOLL)
     int fd;
 #endif
@@ -1321,7 +1326,7 @@ ngx_event_core_init_conf(ngx_cycle_t *cycle, void *conf)
 
 #if (NGX_HAVE_EPOLL) && !(NGX_TEST_BUILD_EPOLL)
 
-    fd = epoll_create(100);
+    fd = epoll_create(100); //创建epoll对象
 
     if (fd != -1)
     {
@@ -1348,7 +1353,7 @@ ngx_event_core_init_conf(ngx_cycle_t *cycle, void *conf)
 #endif
 
 #if (NGX_HAVE_SELECT)
-
+    /* windows下面使用select模型 */
     if (module == NULL)
     {
         module = &ngx_select_module;
@@ -1383,7 +1388,7 @@ ngx_event_core_init_conf(ngx_cycle_t *cycle, void *conf)
         ngx_log_error(NGX_LOG_EMERG, cycle->log, 0, "no events module found");
         return NGX_CONF_ERROR;
     }
-
+    /* 初始化变量 */
     ngx_conf_init_uint_value(ecf->connections, DEFAULT_CONNECTIONS);
     cycle->connection_n = ecf->connections;
 

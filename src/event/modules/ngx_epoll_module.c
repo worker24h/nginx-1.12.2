@@ -311,15 +311,23 @@ failed:
 
 #endif
 
+/**
+ * epoll模型初始化
+ * @param cycle 核心结构体
+ * @param timer 定时器超时时间
+ */
 static ngx_int_t
 ngx_epoll_init(ngx_cycle_t *cycle, ngx_msec_t timer)
 {
     ngx_epoll_conf_t *epcf;
-
+    /* 获取epoll模型下配置结构 */
     epcf = ngx_event_get_conf(cycle->conf_ctx, ngx_epoll_module);
 
     if (ep == -1)
-    {
+    {   
+        /**
+         * 创建epoll对象 其中epoll_create参数没有意义
+         */
         ep = epoll_create(cycle->connection_n / 2);
 
         if (ep == -1)
@@ -330,6 +338,9 @@ ngx_epoll_init(ngx_cycle_t *cycle, ngx_msec_t timer)
         }
 
 #if (NGX_HAVE_EVENTFD)
+        /**
+         * 使用eventfd实现 事件通知功能 主要用于多线程模式下  目前可忽略
+         */
         if (ngx_epoll_notify_init(cycle->log) != NGX_OK)
         {
             ngx_epoll_module_ctx.actions.notify = NULL;
@@ -344,7 +355,10 @@ ngx_epoll_init(ngx_cycle_t *cycle, ngx_msec_t timer)
         ngx_epoll_test_rdhup(cycle);
 #endif
     }
-
+    /**
+     * 创建epoll_event数组 用于存储epoll返回事件
+     * 数组大小为512
+     */
     if (nevents < epcf->events)
     {
         if (event_list)
@@ -360,7 +374,7 @@ ngx_epoll_init(ngx_cycle_t *cycle, ngx_msec_t timer)
         }
     }
 
-    nevents = epcf->events;
+    nevents = epcf->events;//一次性 最大可保存 epoll事件数
 
     ngx_io = ngx_os_io;
 
@@ -535,6 +549,7 @@ failed:
 static void
 ngx_epoll_done(ngx_cycle_t *cycle)
 {
+    /* 关闭epoll对象 */
     if (close(ep) == -1)
     {
         ngx_log_error(NGX_LOG_ALERT, cycle->log, ngx_errno,
@@ -544,7 +559,7 @@ ngx_epoll_done(ngx_cycle_t *cycle)
     ep = -1;
 
 #if (NGX_HAVE_EVENTFD)
-
+    /* 关闭eventfd对象 */
     if (close(notify_fd) == -1)
     {
         ngx_log_error(NGX_LOG_ALERT, cycle->log, ngx_errno,
@@ -579,7 +594,7 @@ ngx_epoll_done(ngx_cycle_t *cycle)
 
 #endif
 
-    ngx_free(event_list);
+    ngx_free(event_list); //释放事件数组
 
     event_list = NULL;
     nevents = 0;
