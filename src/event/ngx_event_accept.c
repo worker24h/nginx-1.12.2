@@ -654,7 +654,7 @@ ngx_trylock_accept_mutex(ngx_cycle_t *cycle)
         if (ngx_accept_mutex_held && ngx_accept_events == 0) {
             return NGX_OK;
         }
-
+        /* 将listen socket 添加到事件驱动中 */
         if (ngx_enable_accept_events(cycle) == NGX_ERROR) {
             ngx_shmtx_unlock(&ngx_accept_mutex);
             return NGX_ERROR;
@@ -668,8 +668,14 @@ ngx_trylock_accept_mutex(ngx_cycle_t *cycle)
 
     ngx_log_debug1(NGX_LOG_DEBUG_EVENT, cycle->log, 0,
                    "accept mutex lock failed: %ui", ngx_accept_mutex_held);
-
-    if (ngx_accept_mutex_held) {
+    /**
+     * 表示获取锁失败,这个时候有就有两种场景
+     * ngx_accept_mutex_held = 0 表示上一次没有获得锁(非本次) 也就是说该进程
+     *   连续两次获取锁失败
+     * ngx_accept_mutex_held = 1 表示上一次获得锁但是本次获得锁失败，这个时候需要
+     *   将listen socket 移除事件驱动本进程不得继续accept事件
+     */
+    if (ngx_accept_mutex_held) {        
         if (ngx_disable_accept_events(cycle, 0) == NGX_ERROR) {
             return NGX_ERROR;
         }
@@ -680,14 +686,17 @@ ngx_trylock_accept_mutex(ngx_cycle_t *cycle)
     return NGX_OK;
 }
 
-
+/**
+ * 将listen socket添加到事件驱动中
+ * @param cycle 核心结构体
+ */
 static ngx_int_t
 ngx_enable_accept_events(ngx_cycle_t *cycle)
 {
     ngx_uint_t         i;
     ngx_listening_t   *ls;
     ngx_connection_t  *c;
-
+    /* 循环遍历listening */
     ls = cycle->listening.elts;
     for (i = 0; i < cycle->listening.nelts; i++) {
 
@@ -696,7 +705,7 @@ ngx_enable_accept_events(ngx_cycle_t *cycle)
         if (c == NULL || c->read->active) {
             continue;
         }
-
+        /* 注册读事件 */
         if (ngx_add_event(c->read, NGX_READ_EVENT, 0) == NGX_ERROR) {
             return NGX_ERROR;
         }

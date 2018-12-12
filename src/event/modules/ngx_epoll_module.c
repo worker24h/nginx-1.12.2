@@ -600,6 +600,13 @@ ngx_epoll_done(ngx_cycle_t *cycle)
     nevents = 0;
 }
 
+/**
+ * 添加事件到事件驱动epoll中
+ * @param ev 事件对象
+ * @param event 事件类型 
+ *        取值为 NGX_READ_EVENT NGX_WRITE_EVENT
+ * @param flags
+ */
 static ngx_int_t
 ngx_epoll_add_event(ngx_event_t *ev, ngx_int_t event, ngx_uint_t flags)
 {
@@ -821,7 +828,11 @@ ngx_epoll_notify(ngx_event_handler_pt handler)
 #endif
 
 /**
- * flags取值: NGX_POST_EVENTS、NGX_UPDATE_TIME
+ * 事件驱动
+ * @param cycle 核心结构体
+ * @param timer 等待时间
+ * @param flags
+ *        取值: NGX_POST_EVENTS、NGX_UPDATE_TIME 
  */
 static ngx_int_t
 ngx_epoll_process_events(ngx_cycle_t *cycle, ngx_msec_t timer, ngx_uint_t flags)
@@ -860,7 +871,7 @@ ngx_epoll_process_events(ngx_cycle_t *cycle, ngx_msec_t timer, ngx_uint_t flags)
      *                            超时，都会产生SIGALRM信号。具体参考ngx_event_process_init
      */
     if (flags & NGX_UPDATE_TIME || ngx_event_timer_alarm)
-    {
+    {//只要是时间相关的事件 就立即更新时间缓存
         ngx_time_update(); //更新时间缓存
     }
 
@@ -870,7 +881,7 @@ ngx_epoll_process_events(ngx_cycle_t *cycle, ngx_msec_t timer, ngx_uint_t flags)
         {
 
             if (ngx_event_timer_alarm)
-            {
+            {//表示发生了SIGALRM信号中断 认为是正常场景
                 ngx_event_timer_alarm = 0;
                 return NGX_OK;
             }
@@ -878,7 +889,7 @@ ngx_epoll_process_events(ngx_cycle_t *cycle, ngx_msec_t timer, ngx_uint_t flags)
             level = NGX_LOG_INFO;
         }
         else
-        {
+        {//异常场景
             level = NGX_LOG_ALERT;
         }
 
@@ -889,7 +900,7 @@ ngx_epoll_process_events(ngx_cycle_t *cycle, ngx_msec_t timer, ngx_uint_t flags)
     if (events == 0)
     {
         if (timer != NGX_TIMER_INFINITE)
-        {
+        {//表示时间超时
             return NGX_OK;
         }
 
@@ -908,7 +919,10 @@ ngx_epoll_process_events(ngx_cycle_t *cycle, ngx_msec_t timer, ngx_uint_t flags)
         rev = c->read;
 
         if (c->fd == -1 || rev->instance != instance)
-        {/* 《深入理解Nginx模块开发与架构解析》一书:318页 */
+        {/**
+          * 当fd=-1 或者instance不一致表示 当前事件是过期事件不需要处理
+          * 《深入理解Nginx模块开发与架构解析》一书:318页 
+          */
             /*
              * the stale event from a file descriptor
              * that was just closed in this iteration

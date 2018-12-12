@@ -411,7 +411,7 @@ ngx_signal_handler(int signo)
         }
 
         break;
-
+    /* worker进程处理相关信号 */
     case NGX_PROCESS_WORKER:
     case NGX_PROCESS_HELPER:
         switch (signo) {
@@ -437,7 +437,7 @@ ngx_signal_handler(int signo)
             ngx_reopen = 1;
             action = ", reopening logs";
             break;
-
+        /* worker进程忽略HUP USR2信号 */
         case ngx_signal_value(NGX_RECONFIGURE_SIGNAL):
         case ngx_signal_value(NGX_CHANGEBIN_SIGNAL):
         case SIGIO:

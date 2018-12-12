@@ -256,7 +256,7 @@ void ngx_process_events_and_timers(ngx_cycle_t *cycle)
                    "timer delta: %M", delta);
     /**
      * 如果是epoll模型 在ngx_epoll_process_events函数中可能会对事件进行划分
-     * 划分到不同队列中
+     * 划分到不同队列中，其中accept队列要优先处理
      */    
     ngx_event_process_posted(cycle, &ngx_posted_accept_events);
     
@@ -269,7 +269,7 @@ void ngx_process_events_and_timers(ngx_cycle_t *cycle)
     {//时间差 表示时间超时，需要处理超时事件
         ngx_event_expire_timers();
     }
-
+    /* 处理其他事件 */
     ngx_event_process_posted(cycle, &ngx_posted_events);
 }
 /**
