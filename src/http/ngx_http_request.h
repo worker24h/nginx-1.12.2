@@ -301,7 +301,7 @@ typedef struct ngx_http_addr_conf_s  ngx_http_addr_conf_t;
 
 typedef struct {
     ngx_http_addr_conf_t             *addr_conf;
-    ngx_http_conf_ctx_t              *conf_ctx;
+    ngx_http_conf_ctx_t              *conf_ctx; /* http confиообнд */
 
 #if (NGX_HTTP_SSL || NGX_COMPAT)
     ngx_str_t                        *ssl_servername;

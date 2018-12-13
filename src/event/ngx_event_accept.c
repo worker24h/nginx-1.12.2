@@ -18,7 +18,10 @@ static void ngx_debug_accepted_connection(ngx_event_conf_t *ecf,
     ngx_connection_t *c);
 #endif
 
-
+/**
+ * 处理Accept事件
+ * @param ev 读事件
+ */
 void
 ngx_event_accept(ngx_event_t *ev)
 {
@@ -36,7 +39,7 @@ ngx_event_accept(ngx_event_t *ev)
     static ngx_uint_t  use_accept4 = 1;
 #endif
 
-    if (ev->timedout) {
+    if (ev->timedout) {//表示超时 重新添加listen socket到事件驱动中
         if (ngx_enable_accept_events((ngx_cycle_t *) ngx_cycle) != NGX_OK) {
             return;
         }
@@ -59,17 +62,17 @@ ngx_event_accept(ngx_event_t *ev)
 
     do {
         socklen = sizeof(ngx_sockaddr_t);
-
+        /* 接收客户端连接建立请求 */
 #if (NGX_HAVE_ACCEPT4)
         if (use_accept4) {
-            s = accept4(lc->fd, &sa.sockaddr, &socklen, SOCK_NONBLOCK);
+            s = accept4(lc->fd, &sa.sockaddr, &socklen, SOCK_NONBLOCK);//默认创建的socket是非阻塞socket
         } else {
             s = accept(lc->fd, &sa.sockaddr, &socklen);
         }
 #else
         s = accept(lc->fd, &sa.sockaddr, &socklen);
 #endif
-
+        /* 连接建立失败 */
         if (s == (ngx_socket_t) -1) {
             err = ngx_socket_errno;
 
@@ -94,7 +97,7 @@ ngx_event_accept(ngx_event_t *ev)
 
             if (use_accept4 && err == NGX_ENOSYS) {
                 use_accept4 = 0;
-                ngx_inherited_nonblocking = 0;
+                ngx_inherited_nonblocking = 0;//尝试用accept接口处理新请求
                 continue;
             }
 #else
@@ -137,11 +140,11 @@ ngx_event_accept(ngx_event_t *ev)
 #if (NGX_STAT_STUB)
         (void) ngx_atomic_fetch_add(ngx_stat_accepted, 1);
 #endif
-        /* 负数 */       
+        /* 负数 负载均衡*/       
         ngx_accept_disabled = ngx_cycle->connection_n / 8
                               - ngx_cycle->free_connection_n;
 
-        c = ngx_get_connection(s, ev->log);
+        c = ngx_get_connection(s, ev->log);//获取新的connection对象
 
         if (c == NULL) {
             if (ngx_close_socket(s) == -1) {
@@ -157,7 +160,7 @@ ngx_event_accept(ngx_event_t *ev)
 #if (NGX_STAT_STUB)
         (void) ngx_atomic_fetch_add(ngx_stat_active, 1);
 #endif
-
+        /* 创建连接级内存池 */
         c->pool = ngx_create_pool(ls->pool_size, ev->log);
         if (c->pool == NULL) {
             ngx_close_accepted_connection(c);
@@ -206,7 +209,7 @@ ngx_event_accept(ngx_event_t *ev)
         }
 
         *log = ls->log;
-
+        /* 初始化connection对象 参考ngx_linux_io */
         c->recv = ngx_recv;
         c->send = ngx_send;
         c->recv_chain = ngx_recv_chain;
@@ -258,7 +261,6 @@ ngx_event_accept(ngx_event_t *ev)
          *           - ngx_atomic_fetch_add()
          *             or protection by critical section or light mutex
          */
-
         c->number = ngx_atomic_fetch_add(ngx_connection_counter, 1);
 
 #if (NGX_STAT_STUB)
@@ -299,7 +301,10 @@ ngx_event_accept(ngx_event_t *ev)
 
         }
 #endif
-
+        /**
+         * ngx_add_conn不空且没有设置NGX_USE_EPOLL_EVENT标志位 
+         * epoll模型不会进入此分支
+         */
         if (ngx_add_conn && (ngx_event_flags & NGX_USE_EPOLL_EVENT) == 0) {
             if (ngx_add_conn(c) == NGX_ERROR) {
                 ngx_close_accepted_connection(c);
@@ -309,7 +314,11 @@ ngx_event_accept(ngx_event_t *ev)
 
         log->data = NULL;
         log->handler = NULL;
-
+        
+        /*
+         * 此回调函数用于处理新的连接 handler赋值由HTTP框架设置
+         * ngx_http_init_connection 这个函数主要功能是将当前socket注册到事件驱动中
+         */
         ls->handler(c);
 
         if (ngx_event_flags & NGX_USE_KQUEUE_EVENT) {
@@ -646,7 +655,7 @@ ngx_event_recvmsg(ngx_event_t *ev)
 ngx_int_t
 ngx_trylock_accept_mutex(ngx_cycle_t *cycle)
 {
-    if (ngx_shmtx_trylock(&ngx_accept_mutex)) {//尝试加锁 加锁成功返回1
+    if (ngx_shmtx_trylock(&ngx_accept_mutex)) {//异步方式 尝试加锁 加锁成功返回1
 
         ngx_log_debug0(NGX_LOG_DEBUG_EVENT, cycle->log, 0,
                        "accept mutex locked");
@@ -654,14 +663,14 @@ ngx_trylock_accept_mutex(ngx_cycle_t *cycle)
         if (ngx_accept_mutex_held && ngx_accept_events == 0) {
             return NGX_OK;
         }
-        /* 将listen socket 添加到事件驱动中 */
+        /* 只有获取到锁 才能将listen socket 添加到自己的事件驱动中 */
         if (ngx_enable_accept_events(cycle) == NGX_ERROR) {
             ngx_shmtx_unlock(&ngx_accept_mutex);
             return NGX_ERROR;
         }
 
         ngx_accept_events = 0;
-        ngx_accept_mutex_held = 1;
+        ngx_accept_mutex_held = 1; //表明当前互斥锁归自己所有
 
         return NGX_OK;
     }
@@ -676,11 +685,11 @@ ngx_trylock_accept_mutex(ngx_cycle_t *cycle)
      *   将listen socket 移除事件驱动本进程不得继续accept事件
      */
     if (ngx_accept_mutex_held) {        
-        if (ngx_disable_accept_events(cycle, 0) == NGX_ERROR) {
+        if (ngx_disable_accept_events(cycle, 0)==NGX_ERROR) {//将listen socket移除时间循环
             return NGX_ERROR;
         }
 
-        ngx_accept_mutex_held = 0;
+        ngx_accept_mutex_held = 0;//修改标志位
     }
 
     return NGX_OK;

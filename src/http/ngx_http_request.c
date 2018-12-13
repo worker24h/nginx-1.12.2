@@ -188,6 +188,10 @@ ngx_http_header_t ngx_http_headers_in[] = {
 
     {ngx_null_string, 0, NULL}};
 
+/**
+ * 初始化http连接
+ * @param c TCP连接
+ */
 void ngx_http_init_connection(ngx_connection_t *c)
 {
     ngx_uint_t i;
@@ -201,7 +205,7 @@ void ngx_http_init_connection(ngx_connection_t *c)
     struct sockaddr_in6 *sin6;
     ngx_http_in6_addr_t *addr6;
 #endif
-
+    /* 在内存池中申请http connection对象 */
     hc = ngx_pcalloc(c->pool, sizeof(ngx_http_connection_t));
     if (hc == NULL)
     {
@@ -209,12 +213,12 @@ void ngx_http_init_connection(ngx_connection_t *c)
         return;
     }
 
-    c->data = hc;
+    c->data = hc;//save 
 
     /* find the server configuration for the address:port */
 
     port = c->listening->servers;
-
+    /* 获取监听地址 如果有多个地址 则循环遍历 */
     if (port->naddrs > 1)
     {
 
@@ -314,7 +318,7 @@ void ngx_http_init_connection(ngx_connection_t *c)
     c->log->action = "waiting for request";
 
     c->log_error = NGX_ERROR_INFO;
-
+    /* 设置读写事件handler回调函数 */
     rev = c->read;
     rev->handler = ngx_http_wait_request_handler; /* 读事件回调函数 */
     c->write->handler = ngx_http_empty_handler; /* 写事件回调函数 再未收到client请求不会主动发送数据 */
@@ -372,10 +376,12 @@ void ngx_http_init_connection(ngx_connection_t *c)
         rev->handler(rev);
         return;
     }
-    //将事件添加到定时器中
+    /*
+     * 将事件添加到定时器和epoll事件驱动中
+     * 回调函数都是ngx_http_wait_request_handler
+     */
     ngx_add_timer(rev, c->listening->post_accept_timeout);
     ngx_reusable_connection(c, 1);
-    //将读事件添加到事件驱动中 默认是epoll
     if (ngx_handle_read_event(rev, 0) != NGX_OK)
     {
         ngx_http_close_connection(c);
@@ -383,6 +389,11 @@ void ngx_http_init_connection(ngx_connection_t *c)
     }
 }
 
+/**
+ * 处理请求
+ * @param rev 事件
+ * 进入此函数，要么是http请求未到定时器超时了，要么是有http请求到来
+ */
 static void
 ngx_http_wait_request_handler(ngx_event_t *rev)
 {
@@ -397,7 +408,7 @@ ngx_http_wait_request_handler(ngx_event_t *rev)
     c = rev->data;
 
     ngx_log_debug0(NGX_LOG_DEBUG_HTTP, c->log, 0, "http wait request handler");
-
+    /* http请求未到 定时器超时 */
     if (rev->timedout)
     {
         ngx_log_error(NGX_LOG_INFO, c->log, NGX_ETIMEDOUT, "client timed out");
@@ -414,10 +425,10 @@ ngx_http_wait_request_handler(ngx_event_t *rev)
     hc = c->data;
     cscf = ngx_http_get_module_srv_conf(hc->conf_ctx, ngx_http_core_module);
 
-    size = cscf->client_header_buffer_size;
+    size = cscf->client_header_buffer_size; //默认1024
 
     b = c->buffer;
-
+    /* 为接收http header申请内存*/
     if (b == NULL)
     {
         b = ngx_create_temp_buf(c->pool, size);
@@ -443,12 +454,11 @@ ngx_http_wait_request_handler(ngx_event_t *rev)
         b->last = b->start;
         b->end = b->last + size;
     }
-
+    /* 接收http报文 实际指向ngx_unix_recv */
     n = c->recv(c, b->last, size);
 
     if (n == NGX_AGAIN)
-    {
-
+    {//需要重新设置定时器事件以及注册READ事件
         if (!rev->timer_set)
         {
             ngx_add_timer(rev, c->listening->post_accept_timeout);
@@ -486,7 +496,7 @@ ngx_http_wait_request_handler(ngx_event_t *rev)
         ngx_http_close_connection(c);
         return;
     }
-
+    /* 表示接收到的字节数大于0 */
     b->last += n;
 
     if (hc->proxy_protocol)
@@ -516,18 +526,22 @@ ngx_http_wait_request_handler(ngx_event_t *rev)
     c->log->action = "reading client request line";
 
     ngx_reusable_connection(c, 0);
-
+    /* 创建ngx_http_request对象 */
     c->data = ngx_http_create_request(c);
     if (c->data == NULL)
     {
         ngx_http_close_connection(c);
         return;
     }
-
+    /* 设置http request-line handler函数 */
     rev->handler = ngx_http_process_request_line;
     ngx_http_process_request_line(rev);
 }
 
+/**
+ * 创建http request对象
+ * @param c 连接对象
+ */
 ngx_http_request_t *
 ngx_http_create_request(ngx_connection_t *c)
 {
@@ -545,7 +559,7 @@ ngx_http_create_request(ngx_connection_t *c)
     hc = c->data;
 
     cscf = ngx_http_get_module_srv_conf(hc->conf_ctx, ngx_http_core_module);
-
+    /* 创建连接级内存池 默认4096 */
     pool = ngx_create_pool(cscf->request_pool_size, c->log);
     if (pool == NULL)
     {
@@ -569,14 +583,15 @@ ngx_http_create_request(ngx_connection_t *c)
     r->srv_conf = hc->conf_ctx->srv_conf;
     r->loc_conf = hc->conf_ctx->loc_conf;
 
-    r->read_event_handler = ngx_http_block_reading;
+    r->read_event_handler = ngx_http_block_reading;/* block翻译为块 */
 
     clcf = ngx_http_get_module_loc_conf(r, ngx_http_core_module);
 
     ngx_set_connection_log(r->connection, clcf->error_log);
-
+    /* 将接收到的buffer设置到header_in中 */
     r->header_in = hc->busy ? hc->busy->buf : c->buffer;
-
+    
+    /* 为http response header分配内存 保存20个header参数 */
     if (ngx_list_init(&r->headers_out.headers, r->pool, 20,
                       sizeof(ngx_table_elt_t)) != NGX_OK)
     {
@@ -997,7 +1012,7 @@ ngx_http_process_request_line(ngx_event_t *rev)
                 return;
             }
         }
-
+        /* 解析http 请求行 */
         rc = ngx_http_parse_request_line(r, r->header_in);
 
         if (rc == NGX_OK)

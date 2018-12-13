@@ -259,7 +259,7 @@ typedef struct {
 typedef struct {
     /* ngx_http_in_addr_t or ngx_http_in6_addr_t */
     void                      *addrs;
-    ngx_uint_t                 naddrs;
+    ngx_uint_t                 naddrs; /* 表示监听多个地址 */
 } ngx_http_port_t;
 
 

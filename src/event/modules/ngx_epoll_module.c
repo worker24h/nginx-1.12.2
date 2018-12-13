@@ -376,7 +376,7 @@ ngx_epoll_init(ngx_cycle_t *cycle, ngx_msec_t timer)
 
     nevents = epcf->events;//一次性 最大可保存 epoll事件数
 
-    ngx_io = ngx_os_io;
+    ngx_io = ngx_os_io; /* 回调函数赋值 主要收发回调函数 */
 
     ngx_event_actions = ngx_epoll_module_ctx.actions;
 
@@ -638,12 +638,12 @@ ngx_epoll_add_event(ngx_event_t *ev, ngx_int_t event, ngx_uint_t flags)
     }
 
     if (e->active)
-    {//表示活跃事件 则进行修改操作
+    {//表示活跃事件 说明当前fd已经添加到epoll中 则进行修改操作
         op = EPOLL_CTL_MOD;
         events |= prev;
     }
     else
-    {//非活跃事件 则进行田健操作
+    {//非活跃事件 说明当前fd未添加到epoll中 则进行添加操作
         op = EPOLL_CTL_ADD;
     }
 
@@ -680,6 +680,13 @@ ngx_epoll_add_event(ngx_event_t *ev, ngx_int_t event, ngx_uint_t flags)
     return NGX_OK;
 }
 
+/**
+ * 从事件驱动epoll中删除事件
+ * @param ev 待删除事件对象
+ * @param event 事件类型 
+ *        取值为 NGX_READ_EVENT NGX_WRITE_EVENT
+ * @param flags
+ */
 static ngx_int_t
 ngx_epoll_del_event(ngx_event_t *ev, ngx_int_t event, ngx_uint_t flags)
 {
@@ -693,8 +700,8 @@ ngx_epoll_del_event(ngx_event_t *ev, ngx_int_t event, ngx_uint_t flags)
      * when the file descriptor is closed, the epoll automatically deletes
      * it from its queue, so we do not need to delete explicitly the event
      * before the closing the file descriptor
+     * 表示当前socket是关闭事件 那么直接将active设置为0即可
      */
-
     if (flags & NGX_CLOSE_EVENT)
     {
         ev->active = 0;
@@ -738,7 +745,7 @@ ngx_epoll_del_event(ngx_event_t *ev, ngx_int_t event, ngx_uint_t flags)
         return NGX_ERROR;
     }
 
-    ev->active = 0;
+    ev->active = 0; //事件被移除 需要把active设置为0
 
     return NGX_OK;
 }

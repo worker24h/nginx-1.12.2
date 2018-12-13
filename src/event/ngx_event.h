@@ -36,7 +36,11 @@ struct ngx_event_s
     void *data;
 
     unsigned write : 1;
-
+    /**
+     * 读取事件分为两种:
+     * 1、客户端发起新连接事件--Accept事件，当是此场景accept为1。 只有监听socket才会设置此字段
+     * 2、客户端与服务端正常通信时的读事件，例如客户端发送请求给服务端
+     */
     unsigned accept : 1;
 
     /** used to detect the stale events in kqueue and epoll
@@ -50,13 +54,17 @@ struct ngx_event_s
     /**
      * the event was passed or would be passed to a kernel;
      * in aio mode - operation was posted.
-     * 添加事件active是1，删除事件active是0，处理当前事件对active不进行修改
+     * 1 表示当前事件已经添加到epoll中
+     * 0 表示当前事件未添加到epoll中
      */
     unsigned active : 1;
 
     unsigned disabled : 1; /* epoll下无效 */
 
-    /* the ready event; in aio mode 0 means that no operation can be posted */
+    /**
+     * the ready event; in aio mode 0 means that no operation can be posted 
+     * 当ready为1 表示当事件需要处理
+     */
     unsigned ready : 1;
 
     unsigned oneshot : 1;
@@ -110,6 +118,7 @@ struct ngx_event_s
      *
      * otherwise:
      *   accept:     1 if accept many, 0 otherwise
+     * 在epoll模型下，表示一次性尽可能多处理Accept事件，与multi_apccept配置一起使用
      */
 
 #if (NGX_HAVE_KQUEUE) || (NGX_HAVE_IOCP)
@@ -417,7 +426,7 @@ extern ngx_uint_t ngx_use_epoll_rdhup;
 #define ngx_add_timer ngx_event_add_timer
 #define ngx_del_timer ngx_event_del_timer
 
-extern ngx_os_io_t ngx_io;
+extern ngx_os_io_t ngx_io; /* linux环境下指向ngx_linux_io */
 
 #define ngx_recv ngx_io.recv
 #define ngx_recv_chain ngx_io.recv_chain

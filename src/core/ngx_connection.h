@@ -120,8 +120,11 @@ typedef enum {
 
 struct ngx_connection_s {
     /**
-     * data指向的下一个connection对象
-     * 由于connection对象在核心结构体中是以数组方式存在，赋值函数ngx_event_process_init
+     * data指向:
+     * 1、下一个connection对象 由于connection对象在核心结构体中是以数组方式存在，
+     *    赋值函数ngx_event_process_init
+     * 2、指向ngx_http_connection_t 赋值函数ngx_http_init_connection
+     * 3、指向ngx_http_request_t赋值函数ngx_http_wait_request_handler
      */
     void               *data;  
     ngx_event_t        *read;  /* 对应ngx_cycle_t中read_events数组中一个元素 赋值函数ngx_event_process_init */
@@ -131,8 +134,8 @@ struct ngx_connection_s {
 
     ngx_recv_pt         recv;
     ngx_send_pt         send;
-    ngx_recv_chain_pt   recv_chain;
-    ngx_send_chain_pt   send_chain;
+    ngx_recv_chain_pt   recv_chain; /* 以ngx_chain_t链表作为参数 接收数据 */
+    ngx_send_chain_pt   send_chain; /* 以ngx_chain_t链表作为参数 发送数据 */
 
     ngx_listening_t    *listening; /* 指向监听的socket对象 */
 
@@ -161,7 +164,11 @@ struct ngx_connection_s {
     ngx_buf_t          *buffer;
 
     ngx_queue_t         queue;
-
+    /**
+     * 连接计数器
+     * 1、当客户端发起TCP连接后，number是第一次加1 参考ngx_event_accept
+     * 2、当该连接主动发起向后端请求服务时，number会再次加1 
+     */
     ngx_atomic_uint_t   number;
 
     ngx_uint_t          requests;
@@ -172,7 +179,7 @@ struct ngx_connection_s {
 
     unsigned            timedout:1;
     unsigned            error:1;
-    unsigned            destroyed:1;
+    unsigned            destroyed:1; /* 表示TCP连接已经销毁 非connection对象 connection对象可服用 */
 
     unsigned            idle:1;
     unsigned            reusable:1;

@@ -40,6 +40,7 @@ ngx_list_t *ngx_list_create(ngx_pool_t *pool, ngx_uint_t n, size_t size);
 /**
  * 初始化ngx_list_t
  * @param list  待初始化的ngx_list_t
+ * @param poll  内存池
  * @param n     每个数组包含的元素个数
  * @param size  数组元素大小
  */
