@@ -322,7 +322,7 @@ ngx_http_block(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 
     *cf = pcf;
 
-
+    /* ³õÊ¼»¯HTTP 11½×¶Î */
     if (ngx_http_init_phase_handlers(cf, cmcf) != NGX_OK) {
         return NGX_CONF_ERROR;
     }

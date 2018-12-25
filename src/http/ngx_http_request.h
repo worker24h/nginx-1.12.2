@@ -233,7 +233,7 @@ typedef struct {
     ngx_str_t                         server;
     off_t                             content_length_n;
     time_t                            keep_alive_n;
-
+    /* NGX_HTTP_CONNECTION_CLOSE */
     unsigned                          connection_type:2;
     unsigned                          chunked:1;
     unsigned                          msie:1;

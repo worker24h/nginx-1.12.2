@@ -506,14 +506,17 @@ ngx_http_write_request_body(ngx_http_request_t *r)
     return NGX_OK;
 }
 
-
+/**
+ * 丢弃http body
+ * @param r 请求
+ */
 ngx_int_t
 ngx_http_discard_request_body(ngx_http_request_t *r)
 {
     ssize_t       size;
     ngx_int_t     rc;
     ngx_event_t  *rev;
-
+    /* 如果不是原始请求、已经标记是丢弃body、request_body不空则直接返回 */
     if (r != r->main || r->discard_body || r->request_body) {
         return NGX_OK;
     }
@@ -532,17 +535,21 @@ ngx_http_discard_request_body(ngx_http_request_t *r)
     rev = r->connection->read;
 
     ngx_log_debug0(NGX_LOG_DEBUG_HTTP, rev->log, 0, "http set discard body");
-
+    /* 当前连接是否存在定时器 */
     if (rev->timer_set) {
         ngx_del_timer(rev);
     }
-
+    /* 判断http body是否有效 */
     if (r->headers_in.content_length_n <= 0 && !r->headers_in.chunked) {
         return NGX_OK;
     }
 
     size = r->header_in->last - r->header_in->pos;
-
+    /**
+     * 1、size为0 表示header_in中还有空间 用此空间接收body 
+     * 2、http是chunked结构
+     * 使用header_in作为接收缓冲区
+     */
     if (size || r->headers_in.chunked) {
         rc = ngx_http_discard_request_body_filter(r, r->header_in);
 
@@ -554,9 +561,10 @@ ngx_http_discard_request_body(ngx_http_request_t *r)
             return NGX_OK;
         }
     }
-
+    /* 单独申请buffer 用于接收 */
     rc = ngx_http_read_discarded_request_body(r);
 
+    /* 返回如下值 那么以后还会关闭执行丢弃操作吗? */
     if (rc == NGX_OK) {
         r->lingering_close = 0;
         return NGX_OK;
@@ -567,20 +575,25 @@ ngx_http_discard_request_body(ngx_http_request_t *r)
     }
 
     /* rc == NGX_AGAIN */
-
+    /**
+     * 丢弃body工作没有彻底完成，需要再次执行 而下次执行丢弃动作的函数为
+     * ngx_http_discarded_request_body_handler 
+     */
     r->read_event_handler = ngx_http_discarded_request_body_handler;
 
     if (ngx_handle_read_event(rev, 0) != NGX_OK) {
         return NGX_HTTP_INTERNAL_SERVER_ERROR;
     }
 
-    r->count++;
+    r->count++; //引用计数自增 保证能够顺利丢弃body
     r->discard_body = 1;
 
     return NGX_OK;
 }
 
-
+/**
+ * 第二次处理
+ */
 void
 ngx_http_discarded_request_body_handler(ngx_http_request_t *r)
 {
@@ -659,7 +672,7 @@ ngx_http_read_discarded_request_body(ngx_http_request_t *r)
     ssize_t    n;
     ngx_int_t  rc;
     ngx_buf_t  b;
-    u_char     buffer[NGX_HTTP_DISCARD_BUFFER_SIZE];
+    u_char     buffer[NGX_HTTP_DISCARD_BUFFER_SIZE]; /* 接收缓冲区 */
 
     ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
                    "http read discarded body");
@@ -677,7 +690,7 @@ ngx_http_read_discarded_request_body(ngx_http_request_t *r)
         if (!r->connection->read->ready) {
             return NGX_AGAIN;
         }
-
+        /* 计算大小 执行recv操作 */
         size = (size_t) ngx_min(r->headers_in.content_length_n,
                                 NGX_HTTP_DISCARD_BUFFER_SIZE);
 
@@ -698,7 +711,7 @@ ngx_http_read_discarded_request_body(ngx_http_request_t *r)
 
         b.pos = buffer;
         b.last = buffer + n;
-
+        /* 执行丢弃动作 */
         rc = ngx_http_discard_request_body_filter(r, &b);
 
         if (rc != NGX_OK) {
@@ -707,7 +720,11 @@ ngx_http_read_discarded_request_body(ngx_http_request_t *r)
     }
 }
 
-
+/**
+ * 执行丢弃动作
+ * @param r http请求
+ * @param b 缓冲区 可能有body也可能没有body
+ */
 static ngx_int_t
 ngx_http_discard_request_body_filter(ngx_http_request_t *r, ngx_buf_t *b)
 {
@@ -715,11 +732,11 @@ ngx_http_discard_request_body_filter(ngx_http_request_t *r, ngx_buf_t *b)
     ngx_int_t                 rc;
     ngx_http_request_body_t  *rb;
 
-    if (r->headers_in.chunked) {
+    if (r->headers_in.chunked) {//表示chunked模式报文
 
         rb = r->request_body;
 
-        if (rb == NULL) {
+        if (rb == NULL) {//没有接收到body 进行分配存储结构
 
             rb = ngx_pcalloc(r->pool, sizeof(ngx_http_request_body_t));
             if (rb == NULL) {
@@ -735,12 +752,12 @@ ngx_http_discard_request_body_filter(ngx_http_request_t *r, ngx_buf_t *b)
         }
 
         for ( ;; ) {
-
+            /* 解析chunked状态 http报文解析 */
             rc = ngx_http_parse_chunked(r, b, rb->chunked);
 
             if (rc == NGX_OK) {
 
-                /* a chunk has been parsed successfully */
+                /* a chunk has been parsed successfully 表示一个chunked段 解析成功 */
 
                 size = b->last - b->pos;
 
@@ -758,7 +775,7 @@ ngx_http_discard_request_body_filter(ngx_http_request_t *r, ngx_buf_t *b)
 
             if (rc == NGX_DONE) {
 
-                /* a whole response has been parsed successfully */
+                /* a whole response has been parsed successfully 表示所有chunked均已经解析完毕 */
 
                 r->headers_in.content_length_n = 0;
                 break;
@@ -766,7 +783,7 @@ ngx_http_discard_request_body_filter(ngx_http_request_t *r, ngx_buf_t *b)
 
             if (rc == NGX_AGAIN) {
 
-                /* set amount of data we want to see next time */
+                /* set amount of data we want to see next time 需要再次进行解析 */
 
                 r->headers_in.content_length_n = rb->chunked->length;
                 break;
@@ -780,7 +797,7 @@ ngx_http_discard_request_body_filter(ngx_http_request_t *r, ngx_buf_t *b)
             return NGX_HTTP_BAD_REQUEST;
         }
 
-    } else {
+    } else {//表示成功接收到body并且不是chunked模式
         size = b->last - b->pos;
 
         if ((off_t) size > r->headers_in.content_length_n) {

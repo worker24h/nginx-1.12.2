@@ -765,6 +765,10 @@ ngx_module_t ngx_http_core_module = {
 
 ngx_str_t ngx_http_core_get_method = {3, (u_char *)"GET"};
 
+/**
+ * 调用所有HTTP模块协同处理请求
+ * @param r HTTP请求
+ */
 void ngx_http_handler(ngx_http_request_t *r)
 {
     ngx_http_core_main_conf_t *cmcf;
@@ -772,7 +776,7 @@ void ngx_http_handler(ngx_http_request_t *r)
     r->connection->log->action = NULL;
 
     if (!r->internal)
-    {
+    {//表示 当前请求来自客户端 而非内部请求
         switch (r->headers_in.connection_type)
         {
         case 0:
@@ -792,7 +796,7 @@ void ngx_http_handler(ngx_http_request_t *r)
         r->phase_handler = 0;
     }
     else
-    {
+    {// 表示内部请求 例如生成子请求
         cmcf = ngx_http_get_module_main_conf(r, ngx_http_core_module);
         r->phase_handler = cmcf->phase_engine.server_rewrite_index;
     }
@@ -804,10 +808,14 @@ void ngx_http_handler(ngx_http_request_t *r)
     r->gzip_vary = 0;
 #endif
 
-    r->write_event_handler = ngx_http_core_run_phases;
-    ngx_http_core_run_phases(r);
+    r->write_event_handler = ngx_http_core_run_phases; //设置写事件处理函数
+    ngx_http_core_run_phases(r);// 处理请求
 }
 
+/**
+ * 执行流水线 处理HTTP请求
+ * @param r HTTP请求
+ */
 void ngx_http_core_run_phases(ngx_http_request_t *r)
 {
     ngx_int_t rc;
@@ -820,7 +828,7 @@ void ngx_http_core_run_phases(ngx_http_request_t *r)
 
     while (ph[r->phase_handler].checker)
     {
-
+        //调用checker函数 然后再执行handler函数
         rc = ph[r->phase_handler].checker(r, &ph[r->phase_handler]); //ngx_http_core_rewrite_phase ngx_http_core_find_config_phase ngx_http_core_generic_phase ngx_http_core_access_phase
 
         if (rc == NGX_OK)
@@ -1375,6 +1383,11 @@ ngx_http_core_try_files_phase(ngx_http_request_t *r,
     /* not reached */
 }
 
+/**
+ * http content阶段处理函数
+ * @param r http请求
+ * @param ph handler对象
+ */
 ngx_int_t
 ngx_http_core_content_phase(ngx_http_request_t *r,
                             ngx_http_phase_handler_t *ph)
@@ -1382,7 +1395,12 @@ ngx_http_core_content_phase(ngx_http_request_t *r,
     size_t root;
     ngx_int_t rc;
     ngx_str_t path;
-
+    
+    /**
+     * content_handler赋值在函数ngx_http_update_location_config中.
+     * 取值实际为ngx_http_core_loc_conf_t中handler
+     * 这里:就是我们自定义回调函数入口
+     */
     if (r->content_handler)
     {
         r->write_event_handler = ngx_http_request_empty_handler;
@@ -1396,7 +1414,7 @@ ngx_http_core_content_phase(ngx_http_request_t *r,
     rc = ph->handler(r);
 
     if (rc != NGX_DECLINED)
-    {
+    {//结束HTTP请求
         ngx_http_finalize_request(r, rc);
         return NGX_OK;
     }
@@ -1406,13 +1424,18 @@ ngx_http_core_content_phase(ngx_http_request_t *r,
     ph++;
 
     if (ph->checker)
-    {
+    {//表示当前handler不是最后一个 继续执行下一个handler
         r->phase_handler++;
         return NGX_AGAIN;
     }
 
     /* no content handler was found */
-
+    /** 
+     * 已经是最后一个handler
+     * 根据请求uri不一样 返回不同的响应
+     * 1) 根目录请求 返回403
+     * 2) 其他返回404
+     */
     if (r->uri.data[r->uri.len - 1] == '/')
     {
 

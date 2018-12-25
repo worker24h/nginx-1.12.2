@@ -1984,6 +1984,12 @@ ngx_http_process_request_header(ngx_http_request_t *r)
     return NGX_OK;
 }
 
+/**
+ * 处理HTTP请求
+ * @param r HTTP请求
+ * 当成功接收到请求行和Header时 就可以处理HTTP请求流程
+ * 至于是否存在body 则在后续流程中处理
+ */
 void ngx_http_process_request(ngx_http_request_t *r)
 {
     ngx_connection_t *c;
@@ -2047,7 +2053,7 @@ void ngx_http_process_request(ngx_http_request_t *r)
     }
 
 #endif
-
+    //既然已经开始处理请求 表明没有发生超时事件 因此要及时删除定时器
     if (c->read->timer_set)
     {
         ngx_del_timer(c->read);
@@ -2059,13 +2065,24 @@ void ngx_http_process_request(ngx_http_request_t *r)
     (void)ngx_atomic_fetch_add(ngx_stat_writing, 1);
     r->stat_writing = 1;
 #endif
-
+    /**
+     * 重新设置读写事件
+     * 为什么设置成ngx_http_request_handler:
+     * 进入此函数表示已经成功接收到HTTP请求行以及Header 后续再有读事件可能就是接收
+     * body。如果接收body只需要ngx_http_request_handler处理即可。 不需要再走过往
+     * 流程
+     */
     c->read->handler = ngx_http_request_handler;
     c->write->handler = ngx_http_request_handler;
-    r->read_event_handler = ngx_http_block_reading;
 
+    r->read_event_handler = ngx_http_block_reading; //对于epoll模型下 没有实际意义  
+
+    /* 调度Nginx中所有HTTP模块协同处理该请求 */
     ngx_http_handler(r);
-
+    
+    /**
+     * 执行post请求 这里的post请求相当于子请求 与HTTP协议中post请求不一样
+     */
     ngx_http_run_posted_requests(c);
 }
 
