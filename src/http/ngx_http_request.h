@@ -413,7 +413,7 @@ struct ngx_http_request_s {
     ngx_http_post_subrequest_t       *post_subrequest;
     ngx_http_posted_request_t        *posted_requests;
 
-    ngx_int_t                         phase_handler;
+    ngx_int_t                         phase_handler; /* Nginx内置http 11阶段标志位 取值ngx_http_phases */
     ngx_http_handler_pt               content_handler;
     ngx_uint_t                        access_code;
 
@@ -542,7 +542,7 @@ struct ngx_http_request_s {
 
     unsigned                          health_check:1;
 
-    /* used to parse HTTP headers */
+    /* used to parse HTTP headers 状态机 */
 
     ngx_uint_t                        state;
 

@@ -20,7 +20,7 @@ static void ngx_debug_accepted_connection(ngx_event_conf_t *ecf,
 
 /**
  * 处理Accept事件
- * @param ev 读事件
+ * @param ev 待读事件
  */
 void
 ngx_event_accept(ngx_event_t *ev)
@@ -52,7 +52,7 @@ ngx_event_accept(ngx_event_t *ev)
     if (!(ngx_event_flags & NGX_USE_KQUEUE_EVENT)) {
         ev->available = ecf->multi_accept;
     }
-
+    /* 从用户数据中获取connection以及listening对象 */
     lc = ev->data;
     ls = lc->listening;
     ev->ready = 0;

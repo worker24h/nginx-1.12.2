@@ -815,6 +815,9 @@ void ngx_http_handler(ngx_http_request_t *r)
 /**
  * 执行流水线 处理HTTP请求
  * @param r HTTP请求
+ * 解析request
+ * nginx一共内置了11种不同阶段，每种阶段的checker回调函数不一样。
+ * checker初始化函数为ngx_http_init_phase_handlers
  */
 void ngx_http_core_run_phases(ngx_http_request_t *r)
 {
@@ -829,8 +832,7 @@ void ngx_http_core_run_phases(ngx_http_request_t *r)
     while (ph[r->phase_handler].checker)
     {
         //调用checker函数 然后再执行handler函数
-        rc = ph[r->phase_handler].checker(r, &ph[r->phase_handler]); //ngx_http_core_rewrite_phase ngx_http_core_find_config_phase ngx_http_core_generic_phase ngx_http_core_access_phase
-
+        rc = ph[r->phase_handler].checker(r, &ph[r->phase_handler]);
         if (rc == NGX_OK)
         {
             return;

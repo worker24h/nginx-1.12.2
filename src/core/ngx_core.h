@@ -37,7 +37,7 @@ typedef void (*ngx_connection_handler_pt)(ngx_connection_t *c);
 #define  NGX_AGAIN      -2
 #define  NGX_BUSY       -3
 #define  NGX_DONE       -4
-#define  NGX_DECLINED   -5
+#define  NGX_DECLINED   -5 /* ¾Ü¾ø */
 #define  NGX_ABORT      -6
 
 

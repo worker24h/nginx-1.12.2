@@ -76,7 +76,7 @@ struct ngx_event_s
     unsigned error : 1;
 
     unsigned timedout : 1; /* 1表示已经超时 */
-    unsigned timer_set : 1;/* 1表示定时器事件 */
+    unsigned timer_set : 1;/* 1表示设置了定时器事件 */
 
     unsigned delayed : 1;
 
@@ -416,7 +416,7 @@ extern ngx_uint_t ngx_use_epoll_rdhup;
 #define ngx_process_events ngx_event_actions.process_events
 #define ngx_done_events ngx_event_actions.done
 
-#define ngx_add_event ngx_event_actions.add
+#define ngx_add_event ngx_event_actions.add /* ngx_epoll_add_event */
 #define ngx_del_event ngx_event_actions.del
 #define ngx_add_conn ngx_event_actions.add_conn
 #define ngx_del_conn ngx_event_actions.del_conn

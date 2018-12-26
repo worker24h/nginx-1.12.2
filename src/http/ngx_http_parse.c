@@ -132,7 +132,7 @@ ngx_http_parse_request_line(ngx_http_request_t *r, ngx_buf_t *b)
         sw_minor_digit,
         sw_spaces_after_digit,
         sw_almost_done
-    } state;
+    } state; /* ×´Ì¬»ú */
 
     state = r->state;
 
