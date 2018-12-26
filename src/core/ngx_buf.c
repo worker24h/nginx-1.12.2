@@ -201,12 +201,12 @@ ngx_chain_get_free_buf(ngx_pool_t *p, ngx_chain_t **free)
 }
 
 /**
- * 跟新chain链表 释放内存 分门别类
+ * 更新chain链表 释放内存 分门别类
  * @param p 内存池
  * @param free 空闲链
  * @param busy 正在使用链
  * @param out  将out中分发到 free或者busy中
- * @param tag  标志 分发原则
+ * @param tag  标志 分发原则 一般是函数指针
  */
 void
 ngx_chain_update_chains(ngx_pool_t *p, ngx_chain_t **free, ngx_chain_t **busy,

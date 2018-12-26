@@ -286,14 +286,14 @@ typedef void (*ngx_http_client_body_handler_pt)(ngx_http_request_t *r);
 
 typedef struct {
     ngx_temp_file_t                  *temp_file;
-    ngx_chain_t                      *bufs;
-    ngx_buf_t                        *buf;
-    off_t                             rest;
+    ngx_chain_t                      *bufs; /* 存储body的链表 最终 */
+    ngx_buf_t                        *buf; /* 临时存储body */
+    off_t                             rest; /* 该值代表还有多少字节的body未读取 */
     off_t                             received;
     ngx_chain_t                      *free;
     ngx_chain_t                      *busy;
     ngx_http_chunked_t               *chunked;
-    ngx_http_client_body_handler_pt   post_handler;
+    ngx_http_client_body_handler_pt   post_handler; /* 用户设置的回调函数 用于处理body */
 } ngx_http_request_body_t;
 
 
@@ -383,12 +383,12 @@ struct ngx_http_request_s {
                                          /* of ngx_http_upstream_state_t */
 
     ngx_pool_t                       *pool;
-    ngx_buf_t                        *header_in;
+    ngx_buf_t                        *header_in; /* http请求 可能会有body */
 
-    ngx_http_headers_in_t             headers_in;
+    ngx_http_headers_in_t             headers_in; /* 只有http header */
     ngx_http_headers_out_t            headers_out;
 
-    ngx_http_request_body_t          *request_body;
+    ngx_http_request_body_t          *request_body; /* 保存http body */
 
     time_t                            lingering_time;
     time_t                            start_sec;
@@ -431,7 +431,7 @@ struct ngx_http_request_s {
     /* used to learn the Apache compatible response length without a header */
     size_t                            header_size;
 
-    off_t                             request_length;
+    off_t                             request_length;/* 表示整个request大小 */
 
     ngx_uint_t                        err_status;
 
@@ -476,7 +476,7 @@ struct ngx_http_request_s {
     unsigned                          request_body_in_clean_file:1;
     unsigned                          request_body_file_group_access:1;
     unsigned                          request_body_file_log_level:3;
-    unsigned                          request_body_no_buffering:1;
+    unsigned                          request_body_no_buffering:1; /* 1 不缓存body */
 
     unsigned                          subrequest_in_memory:1;
     unsigned                          waited:1;
