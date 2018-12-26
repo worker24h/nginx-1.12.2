@@ -555,7 +555,7 @@ ngx_http_discard_request_body(ngx_http_request_t *r)
         return NGX_OK;
     }
 #endif
-
+    /* 处理http1.1 expect */
     if (ngx_http_test_expect(r) != NGX_OK) {
         return NGX_HTTP_INTERNAL_SERVER_ERROR;
     }
@@ -574,18 +574,20 @@ ngx_http_discard_request_body(ngx_http_request_t *r)
 
     size = r->header_in->last - r->header_in->pos;
     /**
-     * 1、size为0 表示header_in中还有空间 用此空间接收body 
+     * 1、size不为0 表示header_in中还有未处理的缓冲数据 即header_in中已经接收了
+     *    一部分body
      * 2、http是chunked结构
      * 使用header_in作为接收缓冲区
      */
     if (size || r->headers_in.chunked) {
+        /* 从header_in过滤出body 执行丢弃动作 */
         rc = ngx_http_discard_request_body_filter(r, r->header_in);
 
         if (rc != NGX_OK) {
             return rc;
         }
 
-        if (r->headers_in.content_length_n == 0) {
+        if (r->headers_in.content_length_n == 0) {//表明body已经处理完毕
             return NGX_OK;
         }
     }
@@ -739,7 +741,7 @@ ngx_http_read_discarded_request_body(ngx_http_request_t *r)
 
         b.pos = buffer;
         b.last = buffer + n;
-        /* 执行丢弃动作 */
+        /* 接收到报文 执行丢弃动作 */
         rc = ngx_http_discard_request_body_filter(r, &b);
 
         if (rc != NGX_OK) {
