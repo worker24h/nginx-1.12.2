@@ -134,7 +134,7 @@ ngx_create_chain_of_bufs(ngx_pool_t *pool, ngx_bufs_t *bufs)
 }
 
 /**
- * 复制buf链表
+ * 合并buf链表 将in链表合并到chain中
  * @param pool 内存池
  * @param chain 输出参数
  * @param in    输入参数
@@ -152,7 +152,7 @@ ngx_chain_add_copy(ngx_pool_t *pool, ngx_chain_t **chain, ngx_chain_t *in)
 
     //循环遍历in
     while (in) {
-        cl = ngx_alloc_chain_link(pool);
+        cl = ngx_alloc_chain_link(pool);//分配链头
         if (cl == NULL) {
             return NGX_ERROR;
         }
@@ -201,7 +201,7 @@ ngx_chain_get_free_buf(ngx_pool_t *p, ngx_chain_t **free)
 }
 
 /**
- * 更新chain链表 释放内存 分门别类
+ * 更新chain链表 释放内存 将busy中空闲节点回到free链表中或者内存池中
  * @param p 内存池
  * @param free 空闲链
  * @param busy 正在使用链
@@ -235,13 +235,16 @@ ngx_chain_update_chains(ngx_pool_t *p, ngx_chain_t **free, ngx_chain_t **busy,
             break;
         }
 
-        /* 如果tag不一致 则将chain挂到pool中 */
+        /**
+         * 如果tag不同(可以理解成该buf是由那个模块创建)，则回到内存池中
+         */
         if (cl->buf->tag != tag) {
-            *busy = cl->next;
-            ngx_free_chain(p, cl);
+            *busy = cl->next; //处理下一个节点
+            ngx_free_chain(p, cl); //会受到内存池总
             continue;
         }
-        /* 修改指针并挂到free链中 */
+        
+        /* tag相同 表示相同模块申请的buf 因此回收到free链表中 */
         cl->buf->pos = cl->buf->start;
         cl->buf->last = cl->buf->start;
 

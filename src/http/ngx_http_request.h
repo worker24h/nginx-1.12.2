@@ -285,14 +285,24 @@ typedef struct {
 typedef void (*ngx_http_client_body_handler_pt)(ngx_http_request_t *r);
 
 typedef struct {
-    ngx_temp_file_t                  *temp_file;
-    ngx_chain_t                      *bufs; /* 存储body的链表 最终 */
-    ngx_buf_t                        *buf; /* 临时存储body */
+    ngx_temp_file_t                  *temp_file; /* 当指针不空说明以文件方式保存body */
+    /**
+     * 存储body的链表 完整body在这里面 因此我们在编写业务逻辑需要特别注意 
+     * 这里还需要注意一点 bufs中ngx_buf_t结构既支持内存结构又支持文件结构
+     * 当我们处理body时 取出buf后需要判断in_file变量是否为1
+     */
+    ngx_chain_t                      *bufs;
+    /**
+     * 用于接收socket数据 即接收body 在ngx_http_read_client_request_body中赋值
+     * buf是用于socket recv函数 所以当body很大的时候 这个buf可能不能满足body长度
+     * 因此会buf指向的内存拷贝到bufs中
+     */
+    ngx_buf_t                        *buf;
     off_t                             rest; /* 该值代表还有多少字节的body未读取 */
-    off_t                             received;
-    ngx_chain_t                      *free;
+    off_t                             received; /* 用于http V2版本 */
+    ngx_chain_t                      *free; /*  */
     ngx_chain_t                      *busy;
-    ngx_http_chunked_t               *chunked;
+    ngx_http_chunked_t               *chunked; /* chunked信息 */
     ngx_http_client_body_handler_pt   post_handler; /* 用户设置的回调函数 用于处理body */
 } ngx_http_request_body_t;
 
@@ -476,7 +486,9 @@ struct ngx_http_request_s {
     unsigned                          request_body_in_clean_file:1;
     unsigned                          request_body_file_group_access:1;
     unsigned                          request_body_file_log_level:3;
-    unsigned                          request_body_no_buffering:1; /* 1 不缓存body */
+
+    /* 1 不缓存body 用于upstream流程中 在proxy模块赋值为1 */
+    unsigned                          request_body_no_buffering:1;
 
     unsigned                          subrequest_in_memory:1;
     unsigned                          waited:1;

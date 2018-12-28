@@ -113,7 +113,7 @@ ngx_http_read_client_request_body(ngx_http_request_t *r,
 
         out.buf = r->header_in;
         out.next = NULL;
-        /* 过滤出body */
+        /* 过滤出body 注意这个函数中会对rb->rest进行赋值 */
         rc = ngx_http_request_body_filter(r, &out);
 
         if (rc != NGX_OK) {
@@ -122,12 +122,22 @@ ngx_http_read_client_request_body(ngx_http_request_t *r,
 
         r->request_length += preread - (r->header_in->last - r->header_in->pos);
 
+        /**
+         * 进入下面if分支条件:
+         * 1、非chunked模式
+         * 2、body还没接收完成，且header_in剩余空间足够接收剩下的body，因此不需要
+         *    在重新创建内存
+         * 做的主要工作:
+         * 重置读写事件，进行socket读取
+         */
         if (!r->headers_in.chunked
             && rb->rest > 0
             && rb->rest <= (off_t) (r->header_in->end - r->header_in->last))
-        {/* 表示buffer可用空间 可用于容纳剩余body */
-            /* the whole request body may be placed in r->header_in */
-
+        {
+            /**
+             * the whole request body may be placed in r->header_in
+             * 申请buf头
+             */
             b = ngx_calloc_buf(r->pool);
             if (b == NULL) {
                 rc = NGX_HTTP_INTERNAL_SERVER_ERROR;
@@ -144,7 +154,7 @@ ngx_http_read_client_request_body(ngx_http_request_t *r,
             /* 设置读写事件回调函数 */
             r->read_event_handler = ngx_http_read_client_request_body_handler;
             r->write_event_handler = ngx_http_request_empty_handler;
-
+            /* 该函数用于从socket中读取数据 并且保存在rb->buf中 */
             rc = ngx_http_do_read_client_request_body(r);
             goto done;
         }
@@ -173,6 +183,10 @@ ngx_http_read_client_request_body(ngx_http_request_t *r,
         goto done;
     }
 
+    /**
+     * 以下流程表示 rest > 0 表示需要再次读取body 
+     * 主要工作是创建buf、设置回调函数以及读取socket缓冲区     
+     */
     clcf = ngx_http_get_module_loc_conf(r, ngx_http_core_module);
 
     size = clcf->client_body_buffer_size; //默认1M
@@ -203,7 +217,7 @@ ngx_http_read_client_request_body(ngx_http_request_t *r,
     rc = ngx_http_do_read_client_request_body(r);
 
 done:
-
+    
     if (r->request_body_no_buffering
         && (rc == NGX_OK || rc == NGX_AGAIN))
     {
@@ -220,7 +234,7 @@ done:
     }
 
     if (rc >= NGX_HTTP_SPECIAL_RESPONSE) {
-        r->main->count--;
+        r->main->count--; //如果返回是大于300表示出现错误 需要将count自减
     }
 
     return rc;
@@ -312,7 +326,7 @@ ngx_http_do_read_client_request_body(ngx_http_request_t *r)
 
                     out.buf = rb->buf;
                     out.next = NULL;
-
+                    /* 将body保存在request_body对象中 */
                     rc = ngx_http_request_body_filter(r, &out);
 
                     if (rc != NGX_OK) {
@@ -320,16 +334,15 @@ ngx_http_do_read_client_request_body(ngx_http_request_t *r)
                     }
 
                 } else {
-
                     /* update chains */
-
                     rc = ngx_http_request_body_filter(r, NULL);
 
                     if (rc != NGX_OK) {
                         return rc;
                     }
                 }
-
+                
+                /* 表示缓冲区中还有body没有被处理 需要再次触发事件驱动 */
                 if (rb->busy != NULL) {
                     if (r->request_body_no_buffering) {//重新注册读事件
                         if (c->read->timer_set) {
@@ -345,18 +358,21 @@ ngx_http_do_read_client_request_body(ngx_http_request_t *r)
 
                     return NGX_HTTP_INTERNAL_SERVER_ERROR;
                 }
-                /* 重置标志位 */
+                /** 
+                 * 这里为什么可以重置标志位:
+                 * Nginx内部实现 当buf缓冲区满时会把缓冲区内存写到临时文件中
+                 */
                 rb->buf->pos = rb->buf->start;
                 rb->buf->last = rb->buf->start;
             }
 
-            size = rb->buf->end - rb->buf->last;
-            rest = rb->rest - (rb->buf->last - rb->buf->pos);
+            size = rb->buf->end - rb->buf->last; //当前buf可用接收数据的空间大小
+            rest = rb->rest - (rb->buf->last - rb->buf->pos); //还有多少body没有接收
 
             if ((off_t) size > rest) {
                 size = (size_t) rest;
             }
-            /* 读取报文 */
+            /* 真正从socket中 读取报文 */
             n = c->recv(c, rb->buf->last, size);
 
             ngx_log_debug1(NGX_LOG_DEBUG_HTTP, c->log, 0,
@@ -384,7 +400,7 @@ ngx_http_do_read_client_request_body(ngx_http_request_t *r)
 
                 out.buf = rb->buf;
                 out.next = NULL;
-
+                //rb->rest在此函数中会被修改
                 rc = ngx_http_request_body_filter(r, &out);
 
                 if (rc != NGX_OK) {
@@ -392,7 +408,7 @@ ngx_http_do_read_client_request_body(ngx_http_request_t *r)
                 }
             }
 
-            if (rb->rest == 0) {
+            if (rb->rest == 0) {//表示body全部内容都已经接收完毕
                 break;
             }
 
@@ -404,7 +420,7 @@ ngx_http_do_read_client_request_body(ngx_http_request_t *r)
         ngx_log_debug1(NGX_LOG_DEBUG_HTTP, c->log, 0,
                        "http client request body rest %O", rb->rest);
 
-        if (rb->rest == 0) {
+        if (rb->rest == 0) {//表示body全部内容都已经接收完毕
             break;
         }
 
@@ -436,14 +452,14 @@ ngx_http_do_read_client_request_body(ngx_http_request_t *r)
         }
     }//外层for循环
     
-    /* 进入下面代码 表示读取body完成 */
+    /* 注意: 进入下面代码 表示读取body完成 */
     if (c->read->timer_set) {
         ngx_del_timer(c->read);
     }
 
     if (!r->request_body_no_buffering) {
         r->read_event_handler = ngx_http_block_reading;
-        rb->post_handler(r);
+        rb->post_handler(r);//调用回调 处理body
     }
 
     return NGX_OK;
@@ -466,8 +482,9 @@ ngx_http_write_request_body(ngx_http_request_t *r)
 
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
                    "http write client request body, bufs %p", rb->bufs);
-
+    /* 进入此分支表示 没有创建临时文件 用于保存body */
     if (rb->temp_file == NULL) {
+        /* 创建临时文件管理结构 */
         tf = ngx_pcalloc(r->pool, sizeof(ngx_temp_file_t));
         if (tf == NULL) {
             return NGX_ERROR;
@@ -503,11 +520,11 @@ ngx_http_write_request_body(ngx_http_request_t *r)
             return NGX_OK;
         }
     }
-
+    /* bufs为NULL表示没有数据 可写到临时文件中 */
     if (rb->bufs == NULL) {
         return NGX_OK;
     }
-
+    /* 将bufs中数据写到临时文件中 */
     n = ngx_write_chain_to_temp_file(rb->temp_file, rb->bufs);
 
     /* TODO: n == 0 or not complete and level event */
@@ -518,8 +535,10 @@ ngx_http_write_request_body(ngx_http_request_t *r)
 
     rb->temp_file->offset += n;
 
-    /* mark all buffers as written */
-
+    /**
+     * mark all buffers as written 
+     * 回收缓冲区
+     */
     for (cl = rb->bufs; cl; /* void */) {
 
         cl->buf->pos = cl->buf->last;
@@ -889,6 +908,7 @@ ngx_http_test_expect(ngx_http_request_t *r)
 
 /**
  * 从in中过滤出body数据 放到request_body中chain中
+ * 此函数会修改request_body对象中rest成员变量
  * @param r http请求
  * @param in 缓冲区
  */
@@ -918,7 +938,10 @@ ngx_http_request_body_length_filter(ngx_http_request_t *r, ngx_chain_t *in)
     ngx_http_request_body_t   *rb;
 
     rb = r->request_body;
-
+    /**
+     * 如果rest是-1表示还没有处理过body 因此将HTTP header中content_length赋给它
+     * rest代表需要处理body长度
+     */
     if (rb->rest == -1) {
         ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
                        "http request body content length filter");
@@ -928,13 +951,13 @@ ngx_http_request_body_length_filter(ngx_http_request_t *r, ngx_chain_t *in)
 
     out = NULL;
     ll = &out;
-
+    /* 循环遍历 链表 */
     for (cl = in; cl; cl = cl->next) {
 
-        if (rb->rest == 0) {
+        if (rb->rest == 0) {//表示body处理完毕
             break;
         }
-
+        /* 获取新的chain链对象 */
         tl = ngx_chain_get_free_buf(r->pool, &rb->free);
         if (tl == NULL) {
             return NGX_HTTP_INTERNAL_SERVER_ERROR;
@@ -943,18 +966,18 @@ ngx_http_request_body_length_filter(ngx_http_request_t *r, ngx_chain_t *in)
         b = tl->buf;
         /* 初始化操作 */
         ngx_memzero(b, sizeof(ngx_buf_t));        
-        b->temporary = 1;
+        b->temporary = 1; //临时内存
         b->tag = (ngx_buf_tag_t) &ngx_http_read_client_request_body;
         b->start = cl->buf->pos;
         b->pos = cl->buf->pos;
         b->last = cl->buf->last;
         b->end = cl->buf->end;
         b->flush = r->request_body_no_buffering;
-        /* 待处理的报文长度 即body长度 */
+        /* 待处理的报文长度 当前buf存储实际body长度 */
         size = cl->buf->last - cl->buf->pos;
 
-        if ((off_t) size < rb->rest) {//表示当前buffer中没有完全包含body
-            cl->buf->pos = cl->buf->last;
+        if ((off_t) size < rb->rest) {//表示当前buffer中没有接收到所有body
+            cl->buf->pos = cl->buf->last; /* 这代表当buffer中未处理的body 已经处理 */
             rb->rest -= size;
 
         } else {//表示body 都已经在buffer中
@@ -963,13 +986,13 @@ ngx_http_request_body_length_filter(ngx_http_request_t *r, ngx_chain_t *in)
             b->last = cl->buf->pos;
             b->last_buf = 1;
         }
-
+        /* 插入链表 */
         *ll = tl;
         ll = &tl->next;
     }
-
-    rc = ngx_http_top_request_body_filter(r, out); //ngx_http_request_body_save_filter
-
+    /* ngx_http_top_request_body_filter回调函数 ngx_http_request_body_save_filter */
+    rc = ngx_http_top_request_body_filter(r, out);
+ 
     ngx_chain_update_chains(r->pool, &rb->free, &rb->busy, &out,
                             (ngx_buf_tag_t) &ngx_http_read_client_request_body);
 
@@ -1172,7 +1195,10 @@ ngx_http_request_body_save_filter(ngx_http_request_t *r, ngx_chain_t *in)
 #endif
 
     /* TODO: coalesce neighbouring buffers */
-    /* 将in链表挂载到bufs中 用于保存已经读取的body */
+    /**
+     * 这个函数虽然是copy但并非真正数据拷贝 而是指针指向
+     * 将in链表挂载到bufs中 用于保存已经读取的body
+     */
     if (ngx_chain_add_copy(r->pool, &rb->bufs, in) != NGX_OK) {
         return NGX_HTTP_INTERNAL_SERVER_ERROR;
     }
@@ -1184,7 +1210,7 @@ ngx_http_request_body_save_filter(ngx_http_request_t *r, ngx_chain_t *in)
     if (rb->rest > 0) {//还有body没有接收
 
         /**
-         * buf表示接收缓冲区 
+         * buf表示接收body的缓冲区 
          * last == end表示缓冲区已满 则尝试将缓冲区内容写到文件中         
          */
         if (rb->buf && rb->buf->last == rb->buf->end
@@ -1196,16 +1222,20 @@ ngx_http_request_body_save_filter(ngx_http_request_t *r, ngx_chain_t *in)
         return NGX_OK;
     }
 
-    /* rb->rest == 0 */
 
-    if (rb->temp_file || r->request_body_in_file_only) {//表示启用临时文件保存body
+    /**
+     * 执行到这里 表示 rb->rest == 0 即所有body均已经处理完毕
+     * 需要判断是否开启了临时文件保存body功能，若开启了需要把request_body中
+     * 保存的body写入到临时文件中
+     */
+    if (rb->temp_file || r->request_body_in_file_only) {
 
-        if (ngx_http_write_request_body(r) != NGX_OK) {
+        if (ngx_http_write_request_body(r) != NGX_OK) {//写入临时文件
             return NGX_HTTP_INTERNAL_SERVER_ERROR;
         }
 
         if (rb->temp_file->file.offset != 0) {
-
+            /* 虽然body用临时文件保存 但是仍然需要用request_body中bufs管理起来 */
             cl = ngx_chain_get_free_buf(r->pool, &rb->free);
             if (cl == NULL) {
                 return NGX_HTTP_INTERNAL_SERVER_ERROR;
@@ -1215,7 +1245,7 @@ ngx_http_request_body_save_filter(ngx_http_request_t *r, ngx_chain_t *in)
 
             ngx_memzero(b, sizeof(ngx_buf_t));
 
-            b->in_file = 1;
+            b->in_file = 1;//表明body采用临时文件存储
             b->file_last = rb->temp_file->file.offset;
             b->file = &rb->temp_file->file;
 
@@ -1225,3 +1255,4 @@ ngx_http_request_body_save_filter(ngx_http_request_t *r, ngx_chain_t *in)
 
     return NGX_OK;
 }
+
