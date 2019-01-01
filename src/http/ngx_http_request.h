@@ -417,8 +417,12 @@ struct ngx_http_request_s {
     ngx_str_t                         http_protocol;
 
     ngx_chain_t                      *out;
+
+    /* 原始请求 客户端发送过来的HTTP请求 原始请求下main指向自己 */
     ngx_http_request_t               *main;
+    /* 当前请求的父请求。未必是原始请求。原始请求的parent为NULL */
     ngx_http_request_t               *parent;
+    
     ngx_http_postponed_request_t     *postponed;
     ngx_http_post_subrequest_t       *post_subrequest;
     ngx_http_posted_request_t        *posted_requests;
@@ -452,6 +456,13 @@ struct ngx_http_request_s {
 
     ngx_http_cleanup_t               *cleanup;
 
+    /**
+     * 表示当前请求引用计数.
+     * 1、当派生出一个子请求时，就会把原始请求count加1，当子请求结束的时候count
+     *    减1。当子请求再次派生出新的子请求，原始请求count也会加1     
+     * 2、当我们接收body的时候，count也会加1，避免在count为0的场景下把请求回调掉。
+     * 3、这里所说的原始请求，就是客户端发送过来的http请求
+     */
     unsigned                          count:16;
     unsigned                          subrequests:8;
     unsigned                          blocked:8;
@@ -538,7 +549,7 @@ struct ngx_http_request_s {
     unsigned                          root_tested:1;
     unsigned                          done:1;
     unsigned                          logged:1;
-
+    /* 缓冲区是否有缓冲未发送完 */
     unsigned                          buffered:4;
 
     unsigned                          main_filter_need_in_memory:1;
