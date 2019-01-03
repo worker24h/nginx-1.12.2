@@ -245,10 +245,15 @@ typedef struct {
     unsigned                          konqueror:1;
 } ngx_http_headers_in_t;
 
-
+/**
+ * 保存HTTP响应行以及响应头
+ */
 typedef struct {
-    ngx_list_t                        headers;
-
+    ngx_list_t                        headers; /* 响应头、响应头以链表方式存储 */
+    /**
+     * 以下所有字段是Nginx为了提升访问速度，把常用字段独立定义出，
+     * 与请求headers_in一样
+     */
     ngx_uint_t                        status;
     ngx_str_t                         status_line;
 
@@ -416,10 +421,11 @@ struct ngx_http_request_s {
     ngx_str_t                         method_name;
     ngx_str_t                         http_protocol;
 
-    ngx_chain_t                      *out;
+    ngx_chain_t                      *out; /* 一次发送不完 会把剩下的保存到这里 */
 
     /* 原始请求 客户端发送过来的HTTP请求 原始请求下main指向自己 */
     ngx_http_request_t               *main;
+
     /* 当前请求的父请求。未必是原始请求。原始请求的parent为NULL */
     ngx_http_request_t               *parent;
     

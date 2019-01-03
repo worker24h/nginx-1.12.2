@@ -2023,21 +2023,26 @@ ngx_http_send_header(ngx_http_request_t *r)
     }
 
     if (r->header_sent)
-    {
+    {//为1 代码header已经发送出去了
         ngx_log_error(NGX_LOG_ALERT, r->connection->log, 0,
                       "header already sent");
         return NGX_ERROR;
     }
 
     if (r->err_status)
-    {
+    {//设置响应码
         r->headers_out.status = r->err_status;
         r->headers_out.status_line.len = 0;
     }
 
-    return ngx_http_top_header_filter(r);
+    return ngx_http_top_header_filter(r); //ngx_http_header_filter
 }
 
+/**
+ * 发送body
+ * @param r http请求
+ * @param in 存储body的缓冲区
+ */
 ngx_int_t
 ngx_http_output_filter(ngx_http_request_t *r, ngx_chain_t *in)
 {
@@ -2049,7 +2054,7 @@ ngx_http_output_filter(ngx_http_request_t *r, ngx_chain_t *in)
     ngx_log_debug2(NGX_LOG_DEBUG_HTTP, c->log, 0,
                    "http output filter \"%V?%V\"", &r->uri, &r->args);
 
-    rc = ngx_http_top_body_filter(r, in);
+    rc = ngx_http_top_body_filter(r, in); //ngx_http_write_filter
 
     if (rc == NGX_ERROR)
     {

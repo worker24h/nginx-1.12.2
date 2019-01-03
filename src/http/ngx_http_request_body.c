@@ -424,7 +424,7 @@ ngx_http_do_read_client_request_body(ngx_http_request_t *r)
             break;
         }
 
-        if (!c->read->ready) {
+        if (!c->read->ready) {//如果是失效事件 需要重新注册事件
 
             if (r->request_body_no_buffering
                 && rb->buf->pos != rb->buf->last)
@@ -641,7 +641,8 @@ ngx_http_discard_request_body(ngx_http_request_t *r)
 }
 
 /**
- * 第二次处理
+ * 非首次处理丢弃body动作
+ * @param r http请求
  */
 void
 ngx_http_discarded_request_body_handler(ngx_http_request_t *r)
@@ -655,17 +656,17 @@ ngx_http_discarded_request_body_handler(ngx_http_request_t *r)
     c = r->connection;
     rev = c->read;
 
-    if (rev->timedout) {
+    if (rev->timedout) {/* 如果是超时事件 则直接结束HTTP请求 */
         c->timedout = 1;
         c->error = 1;
         ngx_http_finalize_request(r, NGX_ERROR);
         return;
     }
 
-    if (r->lingering_time) {
+    if (r->lingering_time) {/* 是否延迟关闭 */
         timer = (ngx_msec_t) r->lingering_time - (ngx_msec_t) ngx_time();
 
-        if ((ngx_msec_int_t) timer <= 0) {
+        if ((ngx_msec_int_t) timer <= 0) {/* 延迟关闭已经过期 需要立即关闭 */
             r->discard_body = 0;
             r->lingering_close = 0;
             ngx_http_finalize_request(r, NGX_ERROR);
@@ -675,10 +676,10 @@ ngx_http_discarded_request_body_handler(ngx_http_request_t *r)
     } else {
         timer = 0;
     }
-
+    /* 执行recv动作 进行socket读取 */
     rc = ngx_http_read_discarded_request_body(r);
 
-    if (rc == NGX_OK) {
+    if (rc == NGX_OK) {/* 处理成功 关闭HTTP请求 */
         r->discard_body = 0;
         r->lingering_close = 0;
         ngx_http_finalize_request(r, NGX_DONE);
@@ -691,15 +692,18 @@ ngx_http_discarded_request_body_handler(ngx_http_request_t *r)
         return;
     }
 
-    /* rc == NGX_AGAIN */
-
+    /* rc == NGX_AGAIN */    
+    /**
+     * 丢弃body工作没有彻底完成，需要再次执行 而下次执行丢弃动作的函数为
+     * ngx_http_discarded_request_body_handler 
+     */
     if (ngx_handle_read_event(rev, 0) != NGX_OK) {
         c->error = 1;
         ngx_http_finalize_request(r, NGX_ERROR);
         return;
     }
 
-    if (timer) {
+    if (timer) {/* 设置定时器 */
 
         clcf = ngx_http_get_module_loc_conf(r, ngx_http_core_module);
 

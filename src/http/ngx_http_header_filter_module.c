@@ -151,7 +151,9 @@ ngx_http_header_out_t  ngx_http_headers_out[] = {
     { ngx_null_string, 0 }
 };
 
-
+/**
+ * 发送响应行、响应头
+ */
 static ngx_int_t
 ngx_http_header_filter(ngx_http_request_t *r)
 {
@@ -174,7 +176,7 @@ ngx_http_header_filter(ngx_http_request_t *r)
 
     r->header_sent = 1;
 
-    if (r != r->main) {
+    if (r != r->main) {//如果不是原始请求 则直接返回
         return NGX_OK;
     }
 
@@ -185,7 +187,7 @@ ngx_http_header_filter(ngx_http_request_t *r)
     if (r->method == NGX_HTTP_HEAD) {
         r->header_only = 1;
     }
-
+    /* 修改时间设置 主要用于浏览器cookie设置 */
     if (r->headers_out.last_modified_time != -1) {
         if (r->headers_out.status != NGX_HTTP_OK
             && r->headers_out.status != NGX_HTTP_PARTIAL_CONTENT
@@ -196,6 +198,7 @@ ngx_http_header_filter(ngx_http_request_t *r)
         }
     }
 
+    /* 计算响应行、响应头所需要的内存长度 */
     len = sizeof("HTTP/1.x ") - 1 + sizeof(CRLF) - 1
           /* the end of the header */
           + sizeof(CRLF) - 1;
@@ -406,7 +409,7 @@ ngx_http_header_filter(ngx_http_request_t *r)
         }
     }
 #endif
-
+    /* 遍历自定义头部或者非常见的头部信息 */
     part = &r->headers_out.headers.part;
     header = part->elts;
 
@@ -430,11 +433,13 @@ ngx_http_header_filter(ngx_http_request_t *r)
                + sizeof(CRLF) - 1;
     }
 
+    /* 分配内存 */
     b = ngx_create_temp_buf(r->pool, len);
     if (b == NULL) {
         return NGX_ERROR;
     }
 
+    /* 赋值 */
     /* "HTTP/1.x " */
     b->last = ngx_cpymem(b->last, "HTTP/1.1 ", sizeof("HTTP/1.x ") - 1);
 
@@ -608,14 +613,14 @@ ngx_http_header_filter(ngx_http_request_t *r)
     *b->last++ = CR; *b->last++ = LF;
 
     r->header_size = b->last - b->pos;
-
+    /* 如果只发送header 此处需要对last_buf标志位设置为1 */
     if (r->header_only) {
         b->last_buf = 1;
     }
 
     out.buf = b;
     out.next = NULL;
-
+    /* 发送header */
     return ngx_http_write_filter(r, &out);
 }
 

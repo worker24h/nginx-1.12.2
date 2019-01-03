@@ -2860,6 +2860,9 @@ ngx_http_set_write_handler(ngx_http_request_t *r)
     return NGX_OK;
 }
 
+/**
+ * 重新设置 写事件
+ */
 static void
 ngx_http_writer(ngx_http_request_t *r)
 {
