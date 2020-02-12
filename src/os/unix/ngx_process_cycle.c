@@ -91,14 +91,18 @@ void ngx_master_process_cycle(ngx_cycle_t *cycle)
     /**
      * 设置信号屏蔽字
      * 参数1: 操作类型
-     *        SIG_BLOCK    将set信号集与当前进程原有的信号屏蔽字，进行或操作
+     *        SIG_BLOCK    将set信号集与当前进程原有的信号屏蔽字，进行或操作，相当于交集。
      *        SIG_UNBLOCK  解除set指定的信号
      *        SIG_SETMASK  将当前进程信号屏蔽字设置为set信号集。相当于重新赋值
-     * 参数2: 
+     * 参数2:
      * 参数3: 该参数是输出参数 返回当前进程设置的信号屏蔽字
-     * 我的个人理解:
-     *     信号的发生是百分之百的异步，而且可能并发产生多个信号。那么如果应用
-     * 进程希望以阻塞方式对信号进行处理，那么就需要设置信号屏蔽字。
+     * 个人理解：
+     * 信号忽略与信号屏蔽，两种不同行为：
+     *    信号忽略： 指的是操作系统将信号发给进程，进程对信号的处理默认是行为是忽略
+     *    信号屏蔽： 产生某个信号后，操作系统暂时不发给进程（有操作系统阻塞），等进程取消屏蔽后在发给
+     *             进程。
+     * 对于nginx来说，在主进程fork子进程之前要把所有信号调用sigprocmask阻塞住，
+     *              等待fork成功后再将阻塞信号清除
      *
      * sigprocmask函数适用于单线程的进程
      * pthread_sigmask函数适用于多线程的进程
@@ -148,7 +152,7 @@ void ngx_master_process_cycle(ngx_cycle_t *cycle)
     for (;;)
     {
         if (delay)
-        {//延迟 
+        {//延迟
             if (ngx_sigalrm)
             {
                 sigio = 0;
@@ -399,7 +403,7 @@ void ngx_single_process_cycle(ngx_cycle_t *cycle)
 
 /**
  * 创建worker进程
- * @param cycle  核心结构体 
+ * @param cycle  核心结构体
  * @param n      worker进程数量
  * @param type   创建worker进程方式
  */
@@ -831,7 +835,7 @@ ngx_worker_process_cycle(ngx_cycle_t *cycle, void *data)
         ngx_log_debug0(NGX_LOG_DEBUG_EVENT, cycle->log, 0, "worker cycle");
         /* 阻塞 等待事件或者定时器超时事件 */
         ngx_process_events_and_timers(cycle);
-        
+
         if (ngx_terminate)
         {/* 处理Terminate事件 */
             ngx_log_error(NGX_LOG_NOTICE, cycle->log, 0, "exiting");
@@ -922,7 +926,7 @@ ngx_worker_process_init(ngx_cycle_t *cycle, ngx_int_t worker)
                           ccf->rlimit_core);
         }
     }
-    
+
     if (geteuid() == 0)
     {/* 设置进程用户、用户组信息 */
         if (setgid(ccf->group) == -1)
